@@ -18,6 +18,10 @@ jobs:
           repository: chainguard-dev/malcontent-samples
           fetch-depth: 0  # Need full history to checkout different commits
 
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+
       - name: Run Malcontent Analysis
         uses: ./  # In actual usage, this would be: username/malcontent-action@v1
         with:
