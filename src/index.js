@@ -212,29 +212,28 @@ async function installMalcontent(version) {
     // Not installed, continue with installation
   }
 
-  // Install using Go
-  core.info('Installing malcontent using Go...');
+  // Use Docker to run malcontent
+  core.info('Setting up malcontent using Docker...');
   
-  // First ensure Go is installed
-  await exec.exec('go', ['version']);
+  // Pull the malcontent image
+  const imageTag = version && version !== 'latest' ? version : 'latest';
+  const image = `cgr.dev/chainguard/malcontent:${imageTag}`;
   
-  // Install malcontent
-  let installCmd = 'go install github.com/chainguard-dev/malcontent@latest';
-  if (version && version !== 'latest') {
-    installCmd = `go install github.com/chainguard-dev/malcontent@${version}`;
-  }
+  await exec.exec('docker', ['pull', image]);
   
-  await exec.exec('sh', ['-c', installCmd]);
+  // Create a wrapper script to run malcontent via Docker
+  const wrapperScript = `#!/bin/bash
+docker run --rm -v "$(pwd):/work" -w /work ${image} "$@"
+`;
   
-  // Add Go bin to PATH if needed
-  const goPath = process.env.GOPATH || `${process.env.HOME}/go`;
-  const goBin = `${goPath}/bin`;
-  core.addPath(goBin);
+  const wrapperPath = '/tmp/malcontent';
+  await fs.writeFile(wrapperPath, wrapperScript);
+  await exec.exec('chmod', ['+x', wrapperPath]);
   
   // Verify installation
-  await exec.exec('malcontent', ['--version']);
+  await exec.exec(wrapperPath, ['--version']);
   
-  return 'malcontent';
+  return wrapperPath;
 }
 
 async function runMalcontentAnalyze(malcontentPath, files, tempDir, suffix, basePath) {
