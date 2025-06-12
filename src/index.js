@@ -198,36 +198,43 @@ async function run() {
 }
 
 async function installMalcontent(version) {
-  const platform = os.platform();
-  const arch = os.arch();
-  
-  let platformStr;
-  if (platform === 'darwin') platformStr = 'Darwin';
-  else if (platform === 'linux') platformStr = 'Linux';
-  else throw new Error(`Unsupported platform: ${platform}`);
-  
-  let archStr;
-  if (arch === 'x64') archStr = 'x86_64';
-  else if (arch === 'arm64') archStr = 'arm64';
-  else throw new Error(`Unsupported architecture: ${arch}`);
-
-  // Get latest release if version not specified
-  if (!version || version === 'latest') {
-    const response = await fetch('https://api.github.com/repos/chainguard-dev/malcontent/releases/latest');
-    const release = await response.json();
-    version = release.tag_name;
+  // First check if malcontent is already installed
+  try {
+    const { exitCode } = await exec.exec('malcontent', ['--version'], {
+      ignoreReturnCode: true,
+      silent: true
+    });
+    if (exitCode === 0) {
+      core.info('Using existing malcontent installation');
+      return 'malcontent';
+    }
+  } catch (error) {
+    // Not installed, continue with installation
   }
 
-  const downloadUrl = `https://github.com/chainguard-dev/malcontent/releases/download/${version}/malcontent_${version.replace('v', '')}_${platformStr}_${archStr}.tar.gz`;
+  // Install using Go
+  core.info('Installing malcontent using Go...');
   
-  core.info(`Downloading malcontent from: ${downloadUrl}`);
-  const downloadPath = await tc.downloadTool(downloadUrl);
-  const extractPath = await tc.extractTar(downloadPath);
+  // First ensure Go is installed
+  await exec.exec('go', ['version']);
   
-  const malcontentPath = path.join(extractPath, 'malcontent');
-  await exec.exec('chmod', ['+x', malcontentPath]);
+  // Install malcontent
+  let installCmd = 'go install github.com/chainguard-dev/malcontent@latest';
+  if (version && version !== 'latest') {
+    installCmd = `go install github.com/chainguard-dev/malcontent@${version}`;
+  }
   
-  return malcontentPath;
+  await exec.exec('sh', ['-c', installCmd]);
+  
+  // Add Go bin to PATH if needed
+  const goPath = process.env.GOPATH || `${process.env.HOME}/go`;
+  const goBin = `${goPath}/bin`;
+  core.addPath(goBin);
+  
+  // Verify installation
+  await exec.exec('malcontent', ['--version']);
+  
+  return 'malcontent';
 }
 
 async function runMalcontentAnalyze(malcontentPath, files, tempDir, suffix, basePath) {
