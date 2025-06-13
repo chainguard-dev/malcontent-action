@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0  # Fetch all history for proper diff analysis
 
       - name: Run Malcontent Analysis
-        uses: ./ # In actual usage, this would be: username/malcontent-action@v1
+        uses: ./ # In actual usage, this would be: imjasonh/malcontent-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-increase: true
