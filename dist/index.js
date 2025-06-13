@@ -34398,12 +34398,12 @@ async function run() {
     const commentOnPR = core.getBooleanInput('comment-on-pr');
     const basePath = core.getInput('base-path') || '.';
     const mode = core.getInput('mode') || 'diff';
-    
+
     const isPullRequest = !!github.context.payload.pull_request;
 
     let baseRefFinal = baseRef;
     let headRefFinal = headRef;
-    
+
     if (!baseRefFinal || !headRefFinal) {
       if (mode === 'diff' && !isPullRequest) {
         // For non-PR contexts in diff mode, use HEAD and HEAD~1
@@ -34425,11 +34425,11 @@ async function run() {
 
     // Create temp directory for analysis
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'malcontent-'));
-    
+
     // Get list of changed files
     const octokit = github.getOctokit(token);
     let files = [];
-    
+
     if (isPullRequest) {
       const response = await octokit.rest.pulls.listFiles({
         owner: github.context.repo.owner,
@@ -34457,7 +34457,7 @@ async function run() {
     if (mode === 'diff') {
       // Use diff mode
       core.info('Using malcontent diff mode...');
-      
+
       const baseDir = path.join(tempDir, 'base');
       const headDir = path.join(tempDir, 'head');
       await fs.mkdir(baseDir, { recursive: true });
@@ -34466,7 +34466,7 @@ async function run() {
       // Checkout base version
       core.info('Checking out base version...');
       await exec.exec('git', ['checkout', baseRefFinal]);
-      
+
       // Copy changed files to base directory
       for (const file of files) {
         if (file.status !== 'added') {
@@ -34484,7 +34484,7 @@ async function run() {
       // Checkout head version
       core.info('Checking out head version...');
       await exec.exec('git', ['checkout', headRefFinal]);
-      
+
       // Copy changed files to head directory
       for (const file of files) {
         if (file.status !== 'removed') {
@@ -34502,15 +34502,15 @@ async function run() {
       // Run malcontent diff
       core.info('Running malcontent diff...');
       const diffOutput = await runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir);
-      
+
       // Parse diff results
       diff = parseDiffOutput(diffOutput);
       diffSummary = generateDiffSummary(diff);
-      
+
     } else if (mode === 'analyze') {
       // Use analyze mode - only analyze the head version
       core.info('Using malcontent analyze mode (head version only)...');
-      
+
       // Checkout and analyze head version only
       core.info('Analyzing head version...');
       await exec.exec('git', ['checkout', headRefFinal]);
@@ -34524,7 +34524,7 @@ async function run() {
         riskIncreased: false,
         totalRiskDelta: 0
       };
-      
+
       // Add all analyzed files as "added" since we're only looking at head
       for (const [file, findings] of Object.entries(headResults)) {
         if (findings) {
@@ -34540,13 +34540,13 @@ async function run() {
           }
         }
       }
-      
+
       diffSummary = generateAnalyzeSummary(diff);
-      
+
     } else {
       throw new Error(`Invalid mode: ${mode}. Must be 'diff' or 'analyze'`);
     }
-    
+
     // Write detailed report
     const reportPath = path.join(tempDir, 'malcontent-diff-report.json');
     await fs.writeFile(reportPath, JSON.stringify(diff, null, 2));
@@ -34596,51 +34596,51 @@ async function installMalcontent(version) {
 
   // Use Docker to run malcontent
   core.info('Setting up malcontent using Docker...');
-  
+
   // Pull the malcontent image
   const imageTag = version && version !== 'latest' ? version : 'latest';
   const image = `cgr.dev/chainguard/malcontent:${imageTag}`;
-  
+
   await exec.exec('docker', ['pull', image]);
-  
+
   // Create a wrapper script to run malcontent via Docker
   const wrapperScript = `#!/bin/bash
 docker run --rm -v "$(pwd):/work" -w /work ${image} "$@"
 `;
-  
+
   const wrapperPath = '/tmp/malcontent';
   await fs.writeFile(wrapperPath, wrapperScript);
   await exec.exec('chmod', ['+x', wrapperPath]);
-  
+
   // Verify installation
   await exec.exec(wrapperPath, ['--version']);
-  
+
   return wrapperPath;
 }
 
 async function runMalcontentAnalyze(malcontentPath, files, tempDir, suffix, basePath) {
   const results = {};
-  
+
   for (const file of files) {
     if (file.status === 'removed' && suffix === 'head') continue;
     if (file.status === 'added' && suffix === 'base') continue;
-    
+
     const filePath = file.filename;
-    
+
     // Skip files that are not within the base path
     if (basePath !== '.' && !filePath.startsWith(basePath + '/')) {
       continue;
     }
-    
+
     const outputPath = path.join(tempDir, `${file.sha}-${suffix}.json`);
-    
+
     let output = '';
     let error = '';
-    
+
     try {
       await exec.exec(
-        malcontentPath, 
-        ['analyze', '--format', 'json', filePath], 
+        malcontentPath,
+        ['--format', 'json', 'analyze', filePath],
         {
           ignoreReturnCode: true,
           cwd: basePath,
@@ -34650,34 +34650,34 @@ async function runMalcontentAnalyze(malcontentPath, files, tempDir, suffix, base
           }
         }
       );
-      
+
       if (error) {
         core.warning(`Malcontent analyze stderr for ${filePath}: ${error}`);
       }
-      
+
       // Save output to file
       await fs.writeFile(outputPath, output);
-      
+
       results[filePath] = JSON.parse(output);
     } catch (error) {
       core.warning(`Failed to analyze ${filePath}: ${error.message}`);
       results[filePath] = null;
     }
   }
-  
+
   return results;
 }
 
 async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
   const outputPath = path.join(tempDir, 'diff-output.json');
-  
+
   let output = '';
   let error = '';
-  
+
   try {
     await exec.exec(
-      malcontentPath, 
-      ['diff', '--format', 'json', baseDir, headDir], 
+      malcontentPath,
+      ['--format', 'json', 'diff', baseDir, headDir],
       {
         ignoreReturnCode: true,
         listeners: {
@@ -34686,14 +34686,14 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
         }
       }
     );
-    
+
     if (error) {
       core.warning(`Malcontent diff stderr: ${error}`);
     }
-    
+
     // Save output to file for debugging
     await fs.writeFile(outputPath, output);
-    
+
     return output;
   } catch (error) {
     core.error(`Failed to run malcontent diff: ${error.message}`);
@@ -34710,11 +34710,11 @@ function parseDiffOutput(diffOutput) {
     totalRiskDelta: 0,
     raw: null
   };
-  
+
   try {
     const parsed = JSON.parse(diffOutput);
     diff.raw = parsed;
-    
+
     // Process the diff output based on malcontent's diff format
     if (parsed.added) {
       for (const [file, data] of Object.entries(parsed.added)) {
@@ -34725,7 +34725,7 @@ function parseDiffOutput(diffOutput) {
         });
       }
     }
-    
+
     if (parsed.removed) {
       for (const [file, data] of Object.entries(parsed.removed)) {
         diff.removed.push({
@@ -34735,13 +34735,13 @@ function parseDiffOutput(diffOutput) {
         });
       }
     }
-    
+
     if (parsed.modified) {
       for (const [file, data] of Object.entries(parsed.modified)) {
         const baseRisk = calculateRiskScore(data.previous);
         const headRisk = calculateRiskScore(data.current);
         const riskDelta = headRisk - baseRisk;
-        
+
         diff.changed.push({
           file,
           baseFindings: data.previous,
@@ -34750,28 +34750,28 @@ function parseDiffOutput(diffOutput) {
           baseRisk,
           headRisk
         });
-        
+
         diff.totalRiskDelta += riskDelta;
         if (riskDelta > 0) {
           diff.riskIncreased = true;
         }
       }
     }
-    
+
   } catch (error) {
     core.warning(`Failed to parse malcontent diff output: ${error.message}`);
     // Try to parse as line-based output if JSON parsing fails
     diff.raw = diffOutput;
   }
-  
+
   return diff;
 }
 
 function calculateRiskScore(findings) {
   if (!findings) return 0;
-  
+
   let score = 0;
-  
+
   // Handle different formats of findings
   if (Array.isArray(findings)) {
     for (const finding of findings) {
@@ -34782,7 +34782,7 @@ function calculateRiskScore(findings) {
       score += getRiskValue(behavior.risk || 'low');
     }
   }
-  
+
   return score;
 }
 
@@ -34799,15 +34799,15 @@ function getRiskValue(risk) {
 
 function generateAnalyzeSummary(diff) {
   const lines = ['## Malcontent Analysis Summary'];
-  
+
   if (diff.added.length === 0) {
     lines.push('✅ No security-relevant findings detected in changed files');
     return lines.join('\\n');
   }
-  
+
   const totalRisk = diff.added.reduce((sum, item) => sum + item.riskScore, 0);
   lines.push(`⚠️ **Total Risk Score: ${totalRisk}**`);
-  
+
   lines.push(`\\n### Files with Security Findings (${diff.added.length})`);
   for (const item of diff.added.slice(0, 10)) {
     lines.push(`- ${item.file} (risk score: ${item.riskScore})`);
@@ -34815,24 +34815,24 @@ function generateAnalyzeSummary(diff) {
   if (diff.added.length > 10) {
     lines.push(`- ... and ${diff.added.length - 10} more`);
   }
-  
+
   return lines.join('\\n');
 }
 
 function generateDiffSummary(diff) {
   const lines = ['## Malcontent Analysis Summary'];
-  
+
   if (diff.totalRiskDelta === 0 && diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
     lines.push('✅ No security-relevant changes detected');
     return lines.join('\\n');
   }
-  
+
   if (diff.riskIncreased) {
     lines.push(`⚠️ **Risk Score Increased by ${diff.totalRiskDelta}**`);
   } else if (diff.totalRiskDelta < 0) {
     lines.push(`✅ Risk Score Decreased by ${Math.abs(diff.totalRiskDelta)}`);
   }
-  
+
   if (diff.added.length > 0) {
     lines.push(`\\n### New Files with Findings (${diff.added.length})`);
     for (const item of diff.added.slice(0, 5)) {
@@ -34842,7 +34842,7 @@ function generateDiffSummary(diff) {
       lines.push(`- ... and ${diff.added.length - 5} more`);
     }
   }
-  
+
   if (diff.removed.length > 0) {
     lines.push(`\\n### Removed Files with Findings (${diff.removed.length})`);
     for (const item of diff.removed.slice(0, 5)) {
@@ -34852,7 +34852,7 @@ function generateDiffSummary(diff) {
       lines.push(`- ... and ${diff.removed.length - 5} more`);
     }
   }
-  
+
   if (diff.changed.length > 0) {
     lines.push(`\\n### Files with Changed Findings (${diff.changed.length})`);
     for (const item of diff.changed.slice(0, 5)) {
@@ -34863,25 +34863,25 @@ function generateDiffSummary(diff) {
       lines.push(`- ... and ${diff.changed.length - 5} more`);
     }
   }
-  
+
   return lines.join('\\n');
 }
 
 async function postPRComment(octokit, summary, diff) {
   const commentMarker = '<!-- malcontent-action-comment -->';
-  
+
   // Find existing comment with our marker
   const { data: comments } = await octokit.rest.issues.listComments({
     owner: github.context.repo.owner,
     repo: github.context.repo.repo,
     issue_number: github.context.payload.pull_request.number
   });
-  
+
   const existingComment = comments.find(comment => comment.body.includes(commentMarker));
-  
+
   // Check if there are any findings
   const hasFindings = diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 0;
-  
+
   if (!hasFindings) {
     // No findings
     if (existingComment) {
@@ -34889,7 +34889,7 @@ async function postPRComment(octokit, summary, diff) {
       const resolvedBody = commentMarker + '\n## Malcontent Analysis Summary\n\n' +
         '✅ Previously detected security issues have been resolved.\n\n' +
         '_Check the comment edit history for details about the previous findings._';
-      
+
       await octokit.rest.issues.updateComment({
         owner: github.context.repo.owner,
         repo: github.context.repo.repo,
@@ -34901,11 +34901,11 @@ async function postPRComment(octokit, summary, diff) {
     // If no existing comment and no findings, don't post anything
     return;
   }
-  
+
   // There are findings - post or update comment
-  const body = commentMarker + '\n' + summary + '\n\n<details><summary>View detailed report</summary>\n\n```json\n' + 
-               JSON.stringify(diff, null, 2).substring(0, 60000) + '\n```\n</details>';
-  
+  const body = commentMarker + '\n' + summary + '\n\n<details><summary>View detailed report</summary>\n\n```json\n' +
+    JSON.stringify(diff, null, 2).substring(0, 60000) + '\n```\n</details>';
+
   if (existingComment) {
     // Update existing comment
     await octokit.rest.issues.updateComment({
@@ -34928,6 +34928,7 @@ async function postPRComment(octokit, summary, diff) {
 }
 
 run();
+
 module.exports = __webpack_exports__;
 /******/ })()
 ;
