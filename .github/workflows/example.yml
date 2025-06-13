@@ -14,9 +14,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: chainguard-dev/malcontent-samples
-          fetch-depth: 0  # Need full history to checkout different commits
 
       - uses: actions/setup-go@v4
         with:
@@ -26,6 +23,5 @@ jobs:
         uses: ./  # In actual usage, this would be: username/malcontent-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          base-path: 'linux/2024.xzutils'  # Base directory for analysis
-          mode: 'analyze'                  # Only analyze, there's nothing to diff against
+          base-path: './'  # Base directory for analysis
           fail-on-increase: true
