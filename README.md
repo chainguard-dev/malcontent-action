@@ -1,15 +1,38 @@
 # Malcontent GitHub Action
 
-A GitHub Action that runs [malcontent](https://github.com/chainguard-dev/malcontent) on PR diffs to detect security changes between versions.
+A GitHub Action that runs [malcontent](https://github.com/chainguard-dev/malcontent) on PR diffs to detect security-relevant changes between code versions.
 
 ## Features
 
-- 🔍 **Diff Analysis**: Compares malcontent findings between base and head commits
-- 📊 **Risk Scoring**: Calculates risk scores and detects increases
-- 💬 **PR Comments**: Automatically comments findings on pull requests
-- 📝 **Workflow Summary**: Outputs to GitHub Actions summary for non-PR contexts
-- 🎯 **Flexible Modes**: Supports both `diff` and `analyze` modes
-- 📁 **Path Filtering**: Can analyze specific directories with `base-path`
+- 🔍 **Security Diff Analysis**: Compares malcontent findings between base and head commits
+- 📊 **Risk Scoring**: Calculates risk scores and tracks increases/decreases
+- 💬 **Detailed PR Comments**: Shows specific behaviors with risk levels and match examples
+- 📝 **Workflow Summary**: Outputs findings to GitHub Actions summary for non-PR contexts
+- 📁 **Path Filtering**: Analyze specific directories with `base-path`
+- 🚀 **Docker-based**: Uses malcontent Docker image for consistent results
+- 🎯 **Risk-based Actions**: Take different actions based on risk magnitude with `risk-delta` output
+
+## PR Comment Example
+
+The action provides detailed behavior analysis in PR comments:
+
+```
+## 🔴 Security Risk Increased (+15 points)
+
+### Modified Files
+
+#### 📄 `src/app.js`
+
+**➕ Added behaviors:**
+- 🔴 **Potential backdoor detected** [CRITICAL]
+  - Match: `eval(atob(`
+  - Rule: [backdoor/js/eval_base64](https://github.com/chainguard-dev/malcontent/blob/main/rules/...)
+- 🟠 **Obfuscated code** [HIGH]
+  - Match: `String.fromCharCode(0x68,0x65,0x6c,0x6c,0x6f)`
+
+**➖ Removed behaviors:**
+- 🟢 ~~Basic logging~~ [LOW]
+```
 
 ## Usage
 
@@ -31,7 +54,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: your-username/malcontent-action@v1
+      - uses: imjasonh/malcontent-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -52,7 +75,7 @@ jobs:
         with:
           fetch-depth: 2  # Need HEAD and HEAD~1
       
-      - uses: your-username/malcontent-action@v1
+      - uses: imjasonh/malcontent-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -62,7 +85,6 @@ jobs:
 | Input | Description | Default |
 |-------|-------------|---------|
 | `github-token` | GitHub token for API access | `${{ github.token }}` |
-| `mode` | Analysis mode: `diff` or `analyze` | `diff` |
 | `base-path` | Base directory to analyze | `.` |
 | `malcontent-version` | Version of malcontent to use | `latest` |
 | `fail-on-increase` | Fail if risk score increases | `true` |
@@ -70,16 +92,63 @@ jobs:
 | `base-ref` | Base ref to compare (auto-detected) | - |
 | `head-ref` | Head ref to analyze (auto-detected) | - |
 
-## Modes
+## Outputs
 
-### Diff Mode (Default)
-Uses malcontent's native `diff` command to compare base and head versions. This is the most efficient method.
+| Output | Description |
+|--------|-------------|
+| `diff-summary` | Summary of malcontent findings diff |
+| `risk-increased` | Whether the risk score increased (`true`/`false`) |
+| `risk-delta` | The change in risk score (positive for increase, negative for decrease) |
+| `report-file` | Path to the full diff report JSON file |
 
-### Analyze Mode
-Only analyzes the head version without comparison. Useful for:
-- Initial security scans
-- When there's no base version to compare
-- Quick security checks
+### Using the risk-delta output
+
+The `risk-delta` output allows you to implement custom logic based on the magnitude of security changes:
+
+```yaml
+- uses: imjasonh/malcontent-action@v1
+  id: malcontent
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    fail-on-increase: false  # Handle manually based on risk delta
+
+- name: Check risk delta
+  run: |
+    echo "Risk changed by: ${{ steps.malcontent.outputs.risk-delta }} points"
+    if [[ "${{ steps.malcontent.outputs.risk-increased }}" == "true" ]]; then
+      echo "⚠️ Security risk increased!"
+    fi
+
+# Fail only on significant risk increase (>10 points)
+- name: Evaluate risk threshold
+  if: steps.malcontent.outputs.risk-delta > 10
+  run: |
+    echo "::error::Significant security risk increase detected!"
+    exit 1
+
+# Or use different thresholds for different actions
+- name: Request security review
+  if: steps.malcontent.outputs.risk-delta > 5 && steps.malcontent.outputs.risk-delta <= 10
+  uses: actions/github-script@v6
+  with:
+    script: |
+      github.rest.issues.addLabels({
+        issue_number: context.issue.number,
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        labels: ['security-review']
+      })
+```
+
+## How It Works
+
+This action uses malcontent's native `diff` command to compare security behaviors between base and head versions of your code. It:
+
+1. Detects the base and head commits (from PR or push context)
+2. Extracts changed files to temporary directories
+3. Runs `malcontent diff` to compare behaviors
+4. Reports findings via PR comments or workflow summaries
+5. Can fail the build if risk increases
 
 ## Building
 
@@ -99,6 +168,26 @@ This will compile the TypeScript/JavaScript code into `dist/index.js` using `@ve
 3. Make changes to `src/index.js`
 4. Build: `npm run build`
 5. Commit both source and dist files
+
+### Code Quality
+
+This project uses Prettier for code formatting:
+
+```bash
+# Format code
+npm run format
+
+# Check formatting
+npm run format:check
+```
+
+Pre-commit hooks are configured with Husky to automatically format code before commits.
+
+## Requirements
+
+- GitHub Actions runner with Docker support (Linux runners)
+- For PR comments: `pull-requests: write` permission
+- For PR diffs: `fetch-depth: 0` in checkout action
 
 ## License
 

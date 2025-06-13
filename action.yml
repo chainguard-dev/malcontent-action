@@ -32,16 +32,14 @@ inputs:
     description: 'Base path within the repository to run malcontent (defaults to repository root)'
     required: false
     default: '.'
-  mode:
-    description: 'Mode to run malcontent in: "diff" (default) or "analyze"'
-    required: false
-    default: 'diff'
 
 outputs:
   diff-summary:
     description: 'Summary of malcontent findings diff'
   risk-increased:
     description: 'Whether the risk score increased'
+  risk-delta:
+    description: 'The change in risk score (positive for increase, negative for decrease)'
   report-file:
     description: 'Path to the full diff report'
 
