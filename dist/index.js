@@ -34622,14 +34622,13 @@ async function installMalcontent(version) {
   await exec.exec('docker', ['pull', image]);
 
   // Create a wrapper script to run malcontent via Docker
-  // We need to mount the full filesystem since we're using temp directories
+  // Mount temp directory and current directory
   const wrapperScript = `#!/bin/bash
-# For absolute paths, we need to mount the root filesystem
-if [[ "$1" == /* ]] || [[ "$2" == /* ]] || [[ "$3" == /* ]]; then
-  docker run --rm -v "/:/host" -w /host/$(pwd) ${image} "$@" | sed 's|/host||g'
-else
-  docker run --rm -v "$(pwd):/work" -w /work ${image} "$@"
-fi
+docker run --rm \\
+  -v "/tmp:/tmp" \\
+  -v "$(pwd):$(pwd)" \\
+  -w "$(pwd)" \\
+  ${image} "$@"
 `;
 
   const wrapperPath = '/tmp/malcontent';
@@ -34718,13 +34717,9 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
   let exitCode = 0;
 
   try {
-    // If using Docker wrapper, we need to adjust paths
-    const adjustedBaseDir = malcontentPath.includes('/tmp/malcontent') ? `/host${baseDir}` : baseDir;
-    const adjustedHeadDir = malcontentPath.includes('/tmp/malcontent') ? `/host${headDir}` : headDir;
-    
     const result = await exec.exec(
       malcontentPath,
-      ['--format', 'json', 'diff', adjustedBaseDir, adjustedHeadDir],
+      ['--format', 'json', 'diff', baseDir, headDir],
       {
         ignoreReturnCode: true,
         listeners: {
