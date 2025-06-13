@@ -34828,24 +34828,33 @@ function parseDiffOutput(diffOutput) {
     // Process added files
     if (diffData.Added) {
       for (const [file, data] of Object.entries(diffData.Added)) {
+        const riskScore = calculateRiskScore(data);
         diff.added.push({
           file: data.Path || file,
           findings: data,
           behaviors: data.Behaviors || [],
-          riskScore: calculateRiskScore(data)
+          riskScore: riskScore
         });
+        // Added files increase total risk
+        diff.totalRiskDelta += riskScore;
+        if (riskScore > 0) {
+          diff.riskIncreased = true;
+        }
       }
     }
 
     // Process removed files
     if (diffData.Removed) {
       for (const [file, data] of Object.entries(diffData.Removed)) {
+        const riskScore = calculateRiskScore(data);
         diff.removed.push({
           file: data.Path || file,
           findings: data,
           behaviors: data.Behaviors || [],
-          riskScore: calculateRiskScore(data)
+          riskScore: riskScore
         });
+        // Removed files decrease total risk
+        diff.totalRiskDelta -= riskScore;
       }
     }
 
