@@ -87,7 +87,6 @@ jobs:
 | Input | Description | Default |
 |-------|-------------|---------|
 | `github-token` | GitHub token for API access | `${{ github.token }}` |
-| `mode` | Analysis mode: `diff` or `analyze` | `diff` |
 | `base-path` | Base directory to analyze | `.` |
 | `malcontent-version` | Version of malcontent to use | `latest` |
 | `fail-on-increase` | Fail if risk score increases | `true` |
@@ -128,16 +127,15 @@ jobs:
     exit 1
 ```
 
-## Modes
+## How It Works
 
-### Diff Mode (Default)
-Uses malcontent's native `diff` command to compare base and head versions. This is the most efficient method.
+This action uses malcontent's native `diff` command to compare security behaviors between base and head versions of your code. It:
 
-### Analyze Mode
-Only analyzes the head version without comparison. Useful for:
-- Initial security scans
-- When there's no base version to compare
-- Quick security checks
+1. Detects the base and head commits (from PR or push context)
+2. Extracts changed files to temporary directories
+3. Runs `malcontent diff` to compare behaviors
+4. Reports findings via PR comments or workflow summaries
+5. Can fail the build if risk increases
 
 ## Building
 
