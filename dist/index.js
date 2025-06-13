@@ -34423,10 +34423,8 @@ async function run() {
     const malcontentPath = await installMalcontent(malcontentVersion);
     core.info(`Malcontent installed at: ${malcontentPath}`);
 
-    // Create temp directory for analysis in workspace
-    const workspaceTemp = '.malcontent-temp';
-    await fs.mkdir(workspaceTemp, { recursive: true });
-    const tempDir = await fs.mkdtemp(path.join(workspaceTemp, 'run-'));
+    // Create temp directory for analysis
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'malcontent-'));
 
     // Get list of changed files
     const octokit = github.getOctokit(token);
@@ -34623,32 +34621,22 @@ async function installMalcontent(version) {
 
   // Use Docker to run malcontent
   core.info('Setting up malcontent using Docker...');
-
+  
   // Pull the malcontent image
   const imageTag = version && version !== 'latest' ? version : 'latest';
   const image = `cgr.dev/chainguard/malcontent:${imageTag}`;
-
+  
   await exec.exec('docker', ['pull', image]);
-
-  // Create a wrapper script to run malcontent via Docker
-  // Mount temp directory and current directory
-  const wrapperScript = `#!/bin/bash
-docker run --rm \\
-  -v "/tmp:/tmp" \\
-  -v "$(pwd):$(pwd)" \\
-  -w "$(pwd)" \\
-  ${image} "$@"
-`;
-
-  const wrapperPath = '/tmp/malcontent';
-  await fs.writeFile(wrapperPath, wrapperScript);
-  await exec.exec('chmod', ['+x', wrapperPath]);
-
-  // Verify installation
-  await exec.exec(wrapperPath, ['--version']);
-
-  return wrapperPath;
+  
+  // Store the image name for later use
+  malcontentDockerImage = image;
+  
+  // Return a special marker to indicate Docker mode
+  return 'docker:malcontent';
 }
+
+// Global variable to store Docker image
+let malcontentDockerImage = null;
 
 async function runMalcontentAnalyze(malcontentPath, files, tempDir, suffix, basePath) {
   const results = {};
@@ -34670,18 +34658,38 @@ async function runMalcontentAnalyze(malcontentPath, files, tempDir, suffix, base
     let error = '';
 
     try {
-      await exec.exec(
-        malcontentPath,
-        ['--format', 'json', 'analyze', filePath],
-        {
-          ignoreReturnCode: true,
-          cwd: basePath,
-          listeners: {
-            stdout: (data) => { output += data.toString(); },
-            stderr: (data) => { error += data.toString(); }
+      if (malcontentPath === 'docker:malcontent') {
+        // Run in Docker
+        const fullPath = path.resolve(basePath, filePath);
+        await exec.exec(
+          'docker',
+          ['run', '--rm', 
+           '-v', `${path.dirname(fullPath)}:/work:ro`,
+           '-w', '/work',
+           malcontentDockerImage,
+           '--format', 'json', 'analyze', path.basename(fullPath)],
+          {
+            ignoreReturnCode: true,
+            listeners: {
+              stdout: (data) => { output += data.toString(); },
+              stderr: (data) => { error += data.toString(); }
+            }
           }
-        }
-      );
+        );
+      } else {
+        await exec.exec(
+          malcontentPath,
+          ['--format', 'json', 'analyze', filePath],
+          {
+            ignoreReturnCode: true,
+            cwd: basePath,
+            listeners: {
+              stdout: (data) => { output += data.toString(); },
+              stderr: (data) => { error += data.toString(); }
+            }
+          }
+        );
+      }
 
       if (error) {
         core.warning(`Malcontent analyze stderr for ${filePath}: ${error}`);
@@ -34726,18 +34734,38 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
   let exitCode = 0;
 
   try {
-    const result = await exec.exec(
-      malcontentPath,
-      ['--format', 'json', 'diff', baseDir, headDir],
-      {
-        ignoreReturnCode: true,
-        listeners: {
-          stdout: (data) => { output += data.toString(); },
-          stderr: (data) => { error += data.toString(); }
+    if (malcontentPath === 'docker:malcontent') {
+      // Run malcontent in Docker with proper volume mounts
+      const result = await exec.exec(
+        'docker',
+        ['run', '--rm', 
+         '-v', `${baseDir}:/base:ro`,
+         '-v', `${headDir}:/head:ro`,
+         malcontentDockerImage,
+         '--format', 'json', 'diff', '/base', '/head'],
+        {
+          ignoreReturnCode: true,
+          listeners: {
+            stdout: (data) => { output += data.toString(); },
+            stderr: (data) => { error += data.toString(); }
+          }
         }
-      }
-    );
-    exitCode = result;
+      );
+      exitCode = result;
+    } else {
+      const result = await exec.exec(
+        malcontentPath,
+        ['--format', 'json', 'diff', baseDir, headDir],
+        {
+          ignoreReturnCode: true,
+          listeners: {
+            stdout: (data) => { output += data.toString(); },
+            stderr: (data) => { error += data.toString(); }
+          }
+        }
+      );
+      exitCode = result;
+    }
 
     if (error && exitCode !== 0) {
       // Check if it's a real error or just no differences
