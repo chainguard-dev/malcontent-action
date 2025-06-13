@@ -642,12 +642,32 @@ function generateDiffSummary(diff) {
     // Sort by risk score (highest first)
     const sortedAdded = [...diff.added].sort((a, b) => b.riskScore - a.riskScore);
 
-    for (const item of sortedAdded.slice(0, 5)) {
+    for (const item of sortedAdded) {
       const fileName = item.file.replace(/^\/[^/]+\//, '');
-      lines.push(`- 📄 \`${fileName}\` (${item.behaviors.length} behaviors, risk score: ${item.riskScore})`);
-    }
-    if (sortedAdded.length > 5) {
-      lines.push(`- ... and ${sortedAdded.length - 5} more files`);
+      lines.push(`#### 📄 \`${fileName}\``);
+      lines.push(`**Risk Score: ${item.riskScore}**`);
+      lines.push('');
+      lines.push('**Behaviors detected:**');
+      
+      // Sort behaviors by risk score (highest first)
+      const sortedBehaviors = [...item.behaviors].sort((a, b) => {
+        return (b.RiskScore || 0) - (a.RiskScore || 0);
+      });
+      
+      // Show top 10 behaviors for new files
+      for (const behavior of sortedBehaviors.slice(0, 10)) {
+        const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+        lines.push(`- ${riskEmoji} **${behavior.Description}** [${behavior.RiskLevel}]`);
+        if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+          lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+        }
+      }
+      
+      if (sortedBehaviors.length > 10) {
+        lines.push(`- ... and ${sortedBehaviors.length - 10} more behaviors`);
+      }
+      
+      lines.push('');
     }
     lines.push('');
   }
@@ -660,12 +680,29 @@ function generateDiffSummary(diff) {
     // Sort by risk score (highest first) 
     const sortedRemoved = [...diff.removed].sort((a, b) => b.riskScore - a.riskScore);
 
-    for (const item of sortedRemoved.slice(0, 5)) {
+    for (const item of sortedRemoved) {
       const fileName = item.file.replace(/^\/[^/]+\//, '');
-      lines.push(`- ~~${fileName}~~ (previously ${item.behaviors.length} behaviors, risk score: ${item.riskScore})`);
-    }
-    if (sortedRemoved.length > 5) {
-      lines.push(`- ... and ${sortedRemoved.length - 5} more files`);
+      lines.push(`#### ~~${fileName}~~`);
+      lines.push(`**Previous Risk Score: ${item.riskScore}**`);
+      lines.push('');
+      lines.push('**Behaviors removed:**');
+      
+      // Sort behaviors by risk score (highest first)
+      const sortedBehaviors = [...item.behaviors].sort((a, b) => {
+        return (b.RiskScore || 0) - (a.RiskScore || 0);
+      });
+      
+      // Show top 10 behaviors that were removed
+      for (const behavior of sortedBehaviors.slice(0, 10)) {
+        const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+        lines.push(`- ${riskEmoji} ~~${behavior.Description}~~ [${behavior.RiskLevel}]`);
+      }
+      
+      if (sortedBehaviors.length > 10) {
+        lines.push(`- ... and ${sortedBehaviors.length - 10} more behaviors removed`);
+      }
+      
+      lines.push('');
     }
     lines.push('');
   }
