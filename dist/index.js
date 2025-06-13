@@ -34763,7 +34763,7 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
           '-v', `${baseDir}:/base:ro`,
           '-v', `${headDir}:/head:ro`,
           malcontentDockerImage,
-          '--format', 'json', 'diff', '/base', '/head', '--file-risk-change'],
+          '--format', 'json', 'diff', '--file-risk-change', '/base', '/head'],
         {
           ignoreReturnCode: true,
           listeners: {
@@ -34776,7 +34776,7 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
     } else {
       const result = await exec.exec(
         malcontentPath,
-        ['--format', 'json', 'diff', baseDir, headDir, '--file-risk-change'],
+        ['--format', 'json', 'diff', '--file-risk-change', baseDir, headDir],
         {
           ignoreReturnCode: true,
           listeners: {
