@@ -34468,6 +34468,7 @@ async function run() {
       await exec.exec('git', ['checkout', baseRefFinal]);
 
       // Copy changed files to base directory
+      let baseFileCount = 0;
       for (const file of files) {
         if (file.status !== 'added') {
           const srcPath = path.join(basePath, file.filename);
@@ -34475,6 +34476,7 @@ async function run() {
           try {
             await fs.mkdir(path.dirname(destPath), { recursive: true });
             await fs.copyFile(srcPath, destPath);
+            baseFileCount++;
           } catch (error) {
             // File might not exist in base version
           }
@@ -34486,6 +34488,7 @@ async function run() {
       await exec.exec('git', ['checkout', headRefFinal]);
 
       // Copy changed files to head directory
+      let headFileCount = 0;
       for (const file of files) {
         if (file.status !== 'removed') {
           const srcPath = path.join(basePath, file.filename);
@@ -34493,19 +34496,34 @@ async function run() {
           try {
             await fs.mkdir(path.dirname(destPath), { recursive: true });
             await fs.copyFile(srcPath, destPath);
+            headFileCount++;
           } catch (error) {
             core.warning(`Failed to copy ${file.filename}: ${error.message}`);
           }
         }
       }
 
-      // Run malcontent diff
-      core.info('Running malcontent diff...');
-      const diffOutput = await runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir);
+      // Check if we have any files to analyze
+      if (baseFileCount === 0 && headFileCount === 0) {
+        core.info('No files to analyze, skipping diff');
+        diff = {
+          added: [],
+          removed: [],
+          changed: [],
+          riskIncreased: false,
+          totalRiskDelta: 0,
+          raw: {}
+        };
+        diffSummary = generateDiffSummary(diff);
+      } else {
+        // Run malcontent diff
+        core.info(`Running malcontent diff on ${baseFileCount} base files and ${headFileCount} head files...`);
+        const diffOutput = await runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir);
 
-      // Parse diff results
-      diff = parseDiffOutput(diffOutput);
-      diffSummary = generateDiffSummary(diff);
+        // Parse diff results
+        diff = parseDiffOutput(diffOutput);
+        diffSummary = generateDiffSummary(diff);
+      }
 
     } else if (mode === 'analyze') {
       // Use analyze mode - only analyze the head version
@@ -34671,11 +34689,30 @@ async function runMalcontentAnalyze(malcontentPath, files, tempDir, suffix, base
 async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
   const outputPath = path.join(tempDir, 'diff-output.json');
 
+  // Check if directories exist and have files
+  try {
+    const baseFiles = await fs.readdir(baseDir);
+    const headFiles = await fs.readdir(headDir);
+    
+    if (baseFiles.length === 0 && headFiles.length === 0) {
+      core.info('No files to analyze in either directory');
+      return JSON.stringify({
+        added: {},
+        removed: {},
+        modified: {}
+      });
+    }
+  } catch (error) {
+    core.error(`Error checking directories: ${error.message}`);
+    throw error;
+  }
+
   let output = '';
   let error = '';
+  let exitCode = 0;
 
   try {
-    await exec.exec(
+    const result = await exec.exec(
       malcontentPath,
       ['--format', 'json', 'diff', baseDir, headDir],
       {
@@ -34686,15 +34723,22 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
         }
       }
     );
+    exitCode = result;
 
-    if (error) {
+    if (error && exitCode !== 0) {
+      // Check if it's a real error or just no differences
+      if (error.includes('no such file or directory') || error.includes('stat')) {
+        throw new Error(`Malcontent diff failed: ${error}`);
+      }
       core.warning(`Malcontent diff stderr: ${error}`);
     }
 
     // Save output to file for debugging
-    await fs.writeFile(outputPath, output);
+    if (output) {
+      await fs.writeFile(outputPath, output);
+    }
 
-    return output;
+    return output || JSON.stringify({ added: {}, removed: {}, modified: {} });
   } catch (error) {
     core.error(`Failed to run malcontent diff: ${error.message}`);
     throw error;
