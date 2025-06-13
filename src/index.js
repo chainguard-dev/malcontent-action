@@ -41,8 +41,10 @@ async function run() {
     const malcontentPath = await installMalcontent(malcontentVersion);
     core.info(`Malcontent installed at: ${malcontentPath}`);
 
-    // Create temp directory for analysis
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'malcontent-'));
+    // Create temp directory for analysis in workspace
+    const workspaceTemp = '.malcontent-temp';
+    await fs.mkdir(workspaceTemp, { recursive: true });
+    const tempDir = await fs.mkdtemp(path.join(workspaceTemp, 'run-'));
 
     // Get list of changed files
     const octokit = github.getOctokit(token);
@@ -208,6 +210,13 @@ async function run() {
     // Fail if risk increased and configured to do so
     if (failOnIncrease && diff.riskIncreased) {
       core.setFailed('Malcontent analysis detected increased risk in this PR');
+    }
+
+    // Clean up temp directory
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch (error) {
+      core.warning(`Failed to clean up temp directory: ${error.message}`);
     }
 
   } catch (error) {
