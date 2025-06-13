@@ -34404,25 +34404,27 @@ async function run() {
     let headRefFinal = headRef;
 
     if (!baseRefFinal || !headRefFinal) {
-    if (!isPullRequest) {
-      // For non-PR contexts, use HEAD and HEAD~1
-      core.info('Not in a pull request context, using HEAD and HEAD~1 for diff');
-      const headCommit = await exec.getExecOutput('git', ['rev-parse', 'HEAD']);
-      const baseCommit = await exec.getExecOutput('git', ['rev-parse', 'HEAD~1']);
-      headRefFinal = headCommit.stdout.trim();
-      baseRefFinal = baseCommit.stdout.trim();
-    } else {
-      throw new Error('Unable to determine base and head refs. This action must be run in a pull request context or with explicit refs.');
-    }
+      if (!isPullRequest) {
+        // For non-PR contexts, use HEAD and HEAD~1
+        core.info('Not in a pull request context, using HEAD and HEAD~1 for diff');
+        const headCommit = await exec.getExecOutput('git', ['rev-parse', 'HEAD']);
+        const baseCommit = await exec.getExecOutput('git', ['rev-parse', 'HEAD~1']);
+        headRefFinal = headCommit.stdout.trim();
+        baseRefFinal = baseCommit.stdout.trim();
+      } else {
+        throw new Error(
+          'Unable to determine base and head refs. This action must be run in a pull request context or with explicit refs.'
+        );
+      }
     }
 
     core.info(`Analyzing diff between ${baseRefFinal} and ${headRefFinal}`);
 
     // Log what triggered this run
     if (isPullRequest) {
-    core.info(`Running on pull request #${github.context.payload.pull_request.number}`);
+      core.info(`Running on pull request #${github.context.payload.pull_request.number}`);
     } else {
-    core.info(`Running on push event for commit ${headRefFinal}`);
+      core.info(`Running on push event for commit ${headRefFinal}`);
     }
 
     // Install malcontent
@@ -34437,31 +34439,39 @@ async function run() {
     let files = [];
 
     if (isPullRequest) {
-    const response = await octokit.rest.pulls.listFiles({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
-      pull_number: github.context.payload.pull_request.number
-    });
-    files = response.data;
+      const response = await octokit.rest.pulls.listFiles({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        pull_number: github.context.payload.pull_request.number
+      });
+      files = response.data;
     } else {
-    // For non-PR contexts, get changed files from git diff
-    // Use two dots (..) to get direct diff, not three dots (...) which includes all commits in between
-    const diffOutput = await exec.getExecOutput('git', ['diff', '--name-status', `${baseRefFinal}..${headRefFinal}`]);
-    files = diffOutput.stdout.trim().split('\n').filter(line => line).map(line => {
-      const [status, ...filenameParts] = line.split('\t');
-      const filename = filenameParts.join('\t');
-      return {
-        filename,
-        status: status === 'A' ? 'added' : status === 'D' ? 'removed' : 'modified',
-        sha: headRefFinal.substring(0, 7) // Short SHA for consistency
-      };
-    });
+      // For non-PR contexts, get changed files from git diff
+      // Use two dots (..) to get direct diff, not three dots (...) which includes all commits in between
+      const diffOutput = await exec.getExecOutput('git', [
+        'diff',
+        '--name-status',
+        `${baseRefFinal}..${headRefFinal}`
+      ]);
+      files = diffOutput.stdout
+        .trim()
+        .split('\n')
+        .filter((line) => line)
+        .map((line) => {
+          const [status, ...filenameParts] = line.split('\t');
+          const filename = filenameParts.join('\t');
+          return {
+            filename,
+            status: status === 'A' ? 'added' : status === 'D' ? 'removed' : 'modified',
+            sha: headRefFinal.substring(0, 7) // Short SHA for consistency
+          };
+        });
 
-    // Log the files we're going to analyze
-    core.info(`Found ${files.length} changed files between commits:`);
-    for (const file of files) {
-      core.info(`  ${file.status}: ${file.filename}`);
-    }
+      // Log the files we're going to analyze
+      core.info(`Found ${files.length} changed files between commits:`);
+      for (const file of files) {
+        core.info(`  ${file.status}: ${file.filename}`);
+      }
     }
 
     let diff;
@@ -34529,7 +34539,9 @@ async function run() {
       diffSummary = generateDiffSummary(diff);
     } else {
       // Run malcontent diff
-      core.info(`Running malcontent diff on ${baseFileCount} base files and ${headFileCount} head files...`);
+      core.info(
+        `Running malcontent diff on ${baseFileCount} base files and ${headFileCount} head files...`
+      );
 
       // List files in each directory for debugging
       const baseDirFiles = await fs.readdir(baseDir, { recursive: true });
@@ -34556,29 +34568,31 @@ async function run() {
 
     // Output results
     if (isPullRequest && commentOnPR) {
-    // Comment on PR if enabled and in PR context
-    await postPRComment(octokit, diffSummary, diff);
+      // Comment on PR if enabled and in PR context
+      await postPRComment(octokit, diffSummary, diff);
     } else if (!isPullRequest) {
-    // Write to workflow summary for non-PR contexts
-    await core.summary
-      .addRaw(diffSummary)
-      .addDetails('View detailed report\n', '```json\n' + JSON.stringify(diff, null, 2).substring(0, 60000) + '\n```')
-      .write();
-    core.info('Malcontent findings written to workflow summary');
+      // Write to workflow summary for non-PR contexts
+      await core.summary
+        .addRaw(diffSummary)
+        .addDetails(
+          'View detailed report\n',
+          '```json\n' + JSON.stringify(diff, null, 2).substring(0, 60000) + '\n```'
+        )
+        .write();
+      core.info('Malcontent findings written to workflow summary');
     }
 
     // Fail if risk increased and configured to do so
     if (failOnIncrease && diff.riskIncreased) {
-    core.setFailed('Malcontent analysis detected increased risk in this PR');
+      core.setFailed('Malcontent analysis detected increased risk in this PR');
     }
 
     // Clean up temp directory
     try {
-    await fs.rm(tempDir, { recursive: true, force: true });
+      await fs.rm(tempDir, { recursive: true, force: true });
     } catch (error) {
-    core.warning(`Failed to clean up temp directory: ${error.message}`);
+      core.warning(`Failed to clean up temp directory: ${error.message}`);
     }
-
   } catch (error) {
     core.setFailed(error.message);
   }
@@ -34588,12 +34602,12 @@ async function installMalcontent(version) {
   // First check if malcontent is already installed
   try {
     const { exitCode } = await exec.exec('malcontent', ['--version'], {
-    ignoreReturnCode: true,
-    silent: true
+      ignoreReturnCode: true,
+      silent: true
     });
     if (exitCode === 0) {
-    core.info('Using existing malcontent installation');
-    return 'malcontent';
+      core.info('Using existing malcontent installation');
+      return 'malcontent';
     }
   } catch (error) {
     // Not installed, continue with installation
@@ -34618,7 +34632,6 @@ async function installMalcontent(version) {
 // Global variable to store Docker image
 let malcontentDockerImage = null;
 
-
 async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
   const outputPath = path.join(tempDir, 'diff-output.json');
 
@@ -34628,12 +34641,12 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
     const headFiles = await fs.readdir(headDir);
 
     if (baseFiles.length === 0 && headFiles.length === 0) {
-    core.info('No files to analyze in either directory');
-    return JSON.stringify({
-      added: {},
-      removed: {},
-      modified: {}
-    });
+      core.info('No files to analyze in either directory');
+      return JSON.stringify({
+        added: {},
+        removed: {},
+        modified: {}
+      });
     }
   } catch (error) {
     core.error(`Error checking directories: ${error.message}`);
@@ -34646,49 +34659,67 @@ async function runMalcontentDiff(malcontentPath, baseDir, headDir, tempDir) {
 
   try {
     if (malcontentPath === 'docker:malcontent') {
-    // Run malcontent in Docker with proper volume mounts
-    const result = await exec.exec(
-      'docker',
-      ['run', '--rm',
-        '-v', `${baseDir}:/base:ro`,
-        '-v', `${headDir}:/head:ro`,
-        malcontentDockerImage,
-        '--format', 'json', 'diff', '--file-risk-change', '/base', '/head'],
-      {
-        ignoreReturnCode: true,
-        listeners: {
-          stdout: (data) => { output += data.toString(); },
-          stderr: (data) => { error += data.toString(); }
+      // Run malcontent in Docker with proper volume mounts
+      const result = await exec.exec(
+        'docker',
+        [
+          'run',
+          '--rm',
+          '-v',
+          `${baseDir}:/base:ro`,
+          '-v',
+          `${headDir}:/head:ro`,
+          malcontentDockerImage,
+          '--format',
+          'json',
+          'diff',
+          '--file-risk-change',
+          '/base',
+          '/head'
+        ],
+        {
+          ignoreReturnCode: true,
+          listeners: {
+            stdout: (data) => {
+              output += data.toString();
+            },
+            stderr: (data) => {
+              error += data.toString();
+            }
+          }
         }
-      }
-    );
-    exitCode = result;
+      );
+      exitCode = result;
     } else {
-    const result = await exec.exec(
-      malcontentPath,
-      ['--format', 'json', 'diff', '--file-risk-change', baseDir, headDir],
-      {
-        ignoreReturnCode: true,
-        listeners: {
-          stdout: (data) => { output += data.toString(); },
-          stderr: (data) => { error += data.toString(); }
+      const result = await exec.exec(
+        malcontentPath,
+        ['--format', 'json', 'diff', '--file-risk-change', baseDir, headDir],
+        {
+          ignoreReturnCode: true,
+          listeners: {
+            stdout: (data) => {
+              output += data.toString();
+            },
+            stderr: (data) => {
+              error += data.toString();
+            }
+          }
         }
-      }
-    );
-    exitCode = result;
+      );
+      exitCode = result;
     }
 
     if (error && exitCode !== 0) {
-    // Check if it's a real error or just no differences
-    if (error.includes('no such file or directory') || error.includes('stat')) {
-      throw new Error(`Malcontent diff failed: ${error}`);
-    }
-    core.warning(`Malcontent diff stderr: ${error}`);
+      // Check if it's a real error or just no differences
+      if (error.includes('no such file or directory') || error.includes('stat')) {
+        throw new Error(`Malcontent diff failed: ${error}`);
+      }
+      core.warning(`Malcontent diff stderr: ${error}`);
     }
 
     // Save output to file for debugging
     if (output) {
-    await fs.writeFile(outputPath, output);
+      await fs.writeFile(outputPath, output);
     }
 
     return output || JSON.stringify({ added: {}, removed: {}, modified: {} });
@@ -34717,63 +34748,64 @@ function parseDiffOutput(diffOutput) {
 
     // Process added files
     if (diffData.Added) {
-    for (const [file, data] of Object.entries(diffData.Added)) {
-      const riskScore = calculateRiskScore(data);
-      diff.added.push({
-        file: data.Path || file,
-        findings: data,
-        behaviors: data.Behaviors || [],
-        riskScore: riskScore
-      });
-      // Added files increase total risk
-      diff.totalRiskDelta += riskScore;
-      if (riskScore > 0) {
-        diff.riskIncreased = true;
+      for (const [file, data] of Object.entries(diffData.Added)) {
+        const riskScore = calculateRiskScore(data);
+        diff.added.push({
+          file: data.Path || file,
+          findings: data,
+          behaviors: data.Behaviors || [],
+          riskScore: riskScore
+        });
+        // Added files increase total risk
+        diff.totalRiskDelta += riskScore;
+        if (riskScore > 0) {
+          diff.riskIncreased = true;
+        }
       }
-    }
     }
 
     // Process removed files
     if (diffData.Removed) {
-    for (const [file, data] of Object.entries(diffData.Removed)) {
-      const riskScore = calculateRiskScore(data);
-      diff.removed.push({
-        file: data.Path || file,
-        findings: data,
-        behaviors: data.Behaviors || [],
-        riskScore: riskScore
-      });
-      // Removed files decrease total risk
-      diff.totalRiskDelta -= riskScore;
-    }
+      for (const [file, data] of Object.entries(diffData.Removed)) {
+        const riskScore = calculateRiskScore(data);
+        diff.removed.push({
+          file: data.Path || file,
+          findings: data,
+          behaviors: data.Behaviors || [],
+          riskScore: riskScore
+        });
+        // Removed files decrease total risk
+        diff.totalRiskDelta -= riskScore;
+      }
     }
 
     // Process modified files
     if (diffData.Modified) {
-    for (const [key, data] of Object.entries(diffData.Modified)) {
-      const behaviors = data.Behaviors || [];
-      const addedBehaviors = behaviors.filter(b => !b.DiffRemoved);
-      const removedBehaviors = behaviors.filter(b => b.DiffRemoved);
+      for (const [key, data] of Object.entries(diffData.Modified)) {
+        const behaviors = data.Behaviors || [];
+        const addedBehaviors = behaviors.filter((b) => !b.DiffRemoved);
+        const removedBehaviors = behaviors.filter((b) => b.DiffRemoved);
 
-      diff.changed.push({
-        file: data.Path || key,
-        path: data.Path,
-        behaviors,
-        addedBehaviors,
-        removedBehaviors,
-        riskDelta: addedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0) -
-          removedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0)
-      });
+        diff.changed.push({
+          file: data.Path || key,
+          path: data.Path,
+          behaviors,
+          addedBehaviors,
+          removedBehaviors,
+          riskDelta:
+            addedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0) -
+            removedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0)
+        });
 
-      const riskDelta = addedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0) -
-        removedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0);
-      diff.totalRiskDelta += riskDelta;
-      if (riskDelta > 0) {
-        diff.riskIncreased = true;
+        const riskDelta =
+          addedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0) -
+          removedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0);
+        diff.totalRiskDelta += riskDelta;
+        if (riskDelta > 0) {
+          diff.riskIncreased = true;
+        }
       }
     }
-    }
-
   } catch (error) {
     core.warning(`Failed to parse malcontent diff output: ${error.message}`);
     // Try to parse as line-based output if JSON parsing fails
@@ -34791,17 +34823,19 @@ function calculateRiskScore(findings) {
   // Handle different formats of findings
   if (Array.isArray(findings)) {
     for (const finding of findings) {
-    score += finding.RiskScore || getRiskValue(finding.RiskLevel || finding.risk || finding.severity || 'low');
+      score +=
+        finding.RiskScore ||
+        getRiskValue(finding.RiskLevel || finding.risk || finding.severity || 'low');
     }
   } else if (findings.Behaviors) {
     // New format with uppercase Behaviors
     for (const behavior of findings.Behaviors) {
-    score += behavior.RiskScore || getRiskValue(behavior.RiskLevel || 'low');
+      score += behavior.RiskScore || getRiskValue(behavior.RiskLevel || 'low');
     }
   } else if (findings.behaviors) {
     // Old format with lowercase behaviors
     for (const behavior of findings.behaviors) {
-    score += behavior.RiskScore || getRiskValue(behavior.risk || 'low');
+      score += behavior.RiskScore || getRiskValue(behavior.risk || 'low');
     }
   }
 
@@ -34810,20 +34844,28 @@ function calculateRiskScore(findings) {
 
 function getRiskValue(risk) {
   switch (risk.toLowerCase()) {
-    case 'critical': return 10;
-    case 'high': return 5;
-    case 'medium': return 3;
-    case 'low': return 1;
-    default: return 0;
+    case 'critical':
+      return 10;
+    case 'high':
+      return 5;
+    case 'medium':
+      return 3;
+    case 'low':
+      return 1;
+    default:
+      return 0;
   }
 }
-
-
 
 function generateDiffSummary(diff) {
   const lines = [];
 
-  if (diff.totalRiskDelta === 0 && diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
+  if (
+    diff.totalRiskDelta === 0 &&
+    diff.added.length === 0 &&
+    diff.removed.length === 0 &&
+    diff.changed.length === 0
+  ) {
     return '## 🟢 No security-relevant changes detected\n\nAll files passed malcontent analysis without any behavioral differences.';
   }
 
@@ -34847,50 +34889,50 @@ function generateDiffSummary(diff) {
     const sortedChanged = [...diff.changed].sort((a, b) => b.riskDelta - a.riskDelta);
 
     for (const item of sortedChanged) {
-    const fileName = item.file.replace(/^\/[^/]+\//, ''); // Remove /base/ or /head/ prefix
-    lines.push(`#### 📄 \`${fileName}\``);
+      const fileName = item.file.replace(/^\/[^/]+\//, ''); // Remove /base/ or /head/ prefix
+      lines.push(`#### 📄 \`${fileName}\``);
 
-    if (item.addedBehaviors.length > 0) {
-      lines.push('');
-      lines.push('**➕ Added behaviors:**');
+      if (item.addedBehaviors.length > 0) {
+        lines.push('');
+        lines.push('**➕ Added behaviors:**');
 
-      // Sort behaviors by risk score (highest first)
-      const sortedAdded = [...item.addedBehaviors].sort((a, b) => {
-        return (b.RiskScore || 0) - (a.RiskScore || 0);
-      });
+        // Sort behaviors by risk score (highest first)
+        const sortedAdded = [...item.addedBehaviors].sort((a, b) => {
+          return (b.RiskScore || 0) - (a.RiskScore || 0);
+        });
 
-      for (const behavior of sortedAdded) {
-        const riskEmoji = getRiskEmoji(behavior.RiskLevel);
-        lines.push(`- ${riskEmoji} **${behavior.Description}** [${behavior.RiskLevel}]`);
-        if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
-          lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
-        }
-        if (behavior.RuleURL) {
-          const ruleName = behavior.RuleName || behavior.ID;
-          lines.push(`  - Rule: [${ruleName}](${behavior.RuleURL})`);
-        }
-      }
-    }
-
-    if (item.removedBehaviors.length > 0) {
-      lines.push('');
-      lines.push('**➖ Removed behaviors:**');
-
-      // Sort behaviors by risk score (highest first)
-      const sortedRemoved = [...item.removedBehaviors].sort((a, b) => {
-        return (b.RiskScore || 0) - (a.RiskScore || 0);
-      });
-
-      for (const behavior of sortedRemoved) {
-        const riskEmoji = getRiskEmoji(behavior.RiskLevel);
-        lines.push(`- ${riskEmoji} ~~${behavior.Description}~~ [${behavior.RiskLevel}]`);
-        if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
-          lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+        for (const behavior of sortedAdded) {
+          const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+          lines.push(`- ${riskEmoji} **${behavior.Description}** [${behavior.RiskLevel}]`);
+          if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+            lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+          }
+          if (behavior.RuleURL) {
+            const ruleName = behavior.RuleName || behavior.ID;
+            lines.push(`  - Rule: [${ruleName}](${behavior.RuleURL})`);
+          }
         }
       }
-    }
 
-    lines.push('');
+      if (item.removedBehaviors.length > 0) {
+        lines.push('');
+        lines.push('**➖ Removed behaviors:**');
+
+        // Sort behaviors by risk score (highest first)
+        const sortedRemoved = [...item.removedBehaviors].sort((a, b) => {
+          return (b.RiskScore || 0) - (a.RiskScore || 0);
+        });
+
+        for (const behavior of sortedRemoved) {
+          const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+          lines.push(`- ${riskEmoji} ~~${behavior.Description}~~ [${behavior.RiskLevel}]`);
+          if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+            lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+          }
+        }
+      }
+
+      lines.push('');
     }
   }
 
@@ -34903,31 +34945,31 @@ function generateDiffSummary(diff) {
     const sortedAdded = [...diff.added].sort((a, b) => b.riskScore - a.riskScore);
 
     for (const item of sortedAdded) {
-    const fileName = item.file.replace(/^\/[^/]+\//, '');
-    lines.push(`#### 📄 \`${fileName}\``);
-    lines.push(`**Risk Score: ${item.riskScore}**`);
-    lines.push('');
-    lines.push('**Behaviors detected:**');
-    
-    // Sort behaviors by risk score (highest first)
-    const sortedBehaviors = [...item.behaviors].sort((a, b) => {
-      return (b.RiskScore || 0) - (a.RiskScore || 0);
-    });
-    
-    // Show top 10 behaviors for new files
-    for (const behavior of sortedBehaviors.slice(0, 10)) {
-      const riskEmoji = getRiskEmoji(behavior.RiskLevel);
-      lines.push(`- ${riskEmoji} **${behavior.Description}** [${behavior.RiskLevel}]`);
-      if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
-        lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      lines.push(`#### 📄 \`${fileName}\``);
+      lines.push(`**Risk Score: ${item.riskScore}**`);
+      lines.push('');
+      lines.push('**Behaviors detected:**');
+
+      // Sort behaviors by risk score (highest first)
+      const sortedBehaviors = [...item.behaviors].sort((a, b) => {
+        return (b.RiskScore || 0) - (a.RiskScore || 0);
+      });
+
+      // Show top 10 behaviors for new files
+      for (const behavior of sortedBehaviors.slice(0, 10)) {
+        const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+        lines.push(`- ${riskEmoji} **${behavior.Description}** [${behavior.RiskLevel}]`);
+        if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+          lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+        }
       }
-    }
-    
-    if (sortedBehaviors.length > 10) {
-      lines.push(`- ... and ${sortedBehaviors.length - 10} more behaviors`);
-    }
-    
-    lines.push('');
+
+      if (sortedBehaviors.length > 10) {
+        lines.push(`- ... and ${sortedBehaviors.length - 10} more behaviors`);
+      }
+
+      lines.push('');
     }
     lines.push('');
   }
@@ -34937,32 +34979,32 @@ function generateDiffSummary(diff) {
     lines.push('### Removed Files');
     lines.push('');
 
-    // Sort by risk score (highest first) 
+    // Sort by risk score (highest first)
     const sortedRemoved = [...diff.removed].sort((a, b) => b.riskScore - a.riskScore);
 
     for (const item of sortedRemoved) {
-    const fileName = item.file.replace(/^\/[^/]+\//, '');
-    lines.push(`#### ~~${fileName}~~`);
-    lines.push(`**Previous Risk Score: ${item.riskScore}**`);
-    lines.push('');
-    lines.push('**Behaviors removed:**');
-    
-    // Sort behaviors by risk score (highest first)
-    const sortedBehaviors = [...item.behaviors].sort((a, b) => {
-      return (b.RiskScore || 0) - (a.RiskScore || 0);
-    });
-    
-    // Show top 10 behaviors that were removed
-    for (const behavior of sortedBehaviors.slice(0, 10)) {
-      const riskEmoji = getRiskEmoji(behavior.RiskLevel);
-      lines.push(`- ${riskEmoji} ~~${behavior.Description}~~ [${behavior.RiskLevel}]`);
-    }
-    
-    if (sortedBehaviors.length > 10) {
-      lines.push(`- ... and ${sortedBehaviors.length - 10} more behaviors removed`);
-    }
-    
-    lines.push('');
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      lines.push(`#### ~~${fileName}~~`);
+      lines.push(`**Previous Risk Score: ${item.riskScore}**`);
+      lines.push('');
+      lines.push('**Behaviors removed:**');
+
+      // Sort behaviors by risk score (highest first)
+      const sortedBehaviors = [...item.behaviors].sort((a, b) => {
+        return (b.RiskScore || 0) - (a.RiskScore || 0);
+      });
+
+      // Show top 10 behaviors that were removed
+      for (const behavior of sortedBehaviors.slice(0, 10)) {
+        const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+        lines.push(`- ${riskEmoji} ~~${behavior.Description}~~ [${behavior.RiskLevel}]`);
+      }
+
+      if (sortedBehaviors.length > 10) {
+        lines.push(`- ... and ${sortedBehaviors.length - 10} more behaviors removed`);
+      }
+
+      lines.push('');
     }
     lines.push('');
   }
@@ -34973,11 +35015,16 @@ function generateDiffSummary(diff) {
 function getRiskEmoji(riskLevel) {
   if (!riskLevel) return '⚪';
   switch (riskLevel.toUpperCase()) {
-    case 'CRITICAL': return '🔴';
-    case 'HIGH': return '🟠';
-    case 'MEDIUM': return '🟡';
-    case 'LOW': return '🟢';
-    default: return '⚪';
+    case 'CRITICAL':
+      return '🔴';
+    case 'HIGH':
+      return '🟠';
+    case 'MEDIUM':
+      return '🟡';
+    case 'LOW':
+      return '🟢';
+    default:
+      return '⚪';
   }
 }
 
@@ -34991,7 +35038,7 @@ async function postPRComment(octokit, summary, diff) {
     issue_number: github.context.payload.pull_request.number
   });
 
-  const existingComment = comments.find(comment => comment.body.includes(commentMarker));
+  const existingComment = comments.find((comment) => comment.body.includes(commentMarker));
 
   // Check if there are any findings
   const hasFindings = diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 0;
@@ -34999,18 +35046,22 @@ async function postPRComment(octokit, summary, diff) {
   if (!hasFindings) {
     // No findings
     if (existingComment) {
-    // Update existing comment to indicate issues were resolved
-    const resolvedBody = commentMarker + '\n## Malcontent Analysis Summary\n\n' +
-      '✅ Previously detected security issues have been resolved.\n\n' +
-      '_Check the comment edit history for details about the previous findings._';
+      // Update existing comment to indicate issues were resolved
+      const resolvedBody =
+        commentMarker +
+        '\n## Malcontent Analysis Summary\n\n' +
+        '✅ Previously detected security issues have been resolved.\n\n' +
+        '_Check the comment edit history for details about the previous findings._';
 
-    await octokit.rest.issues.updateComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
-      comment_id: existingComment.id,
-      body: resolvedBody
-    });
-    core.info(`Updated existing comment to indicate issues resolved: ${existingComment.html_url}`);
+      await octokit.rest.issues.updateComment({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        comment_id: existingComment.id,
+        body: resolvedBody
+      });
+      core.info(
+        `Updated existing comment to indicate issues resolved: ${existingComment.html_url}`
+      );
     }
     // If no existing comment and no findings, don't post anything
     return;
@@ -35029,64 +35080,67 @@ async function postPRComment(octokit, summary, diff) {
     const allItems = [];
 
     for (const item of diff.changed) {
-    allItems.push({
-      ...item,
-      status: 'Modified',
-      riskChange: item.riskDelta,
-      behaviorCount: `+${item.addedBehaviors.length}/-${item.removedBehaviors.length}`
-    });
+      allItems.push({
+        ...item,
+        status: 'Modified',
+        riskChange: item.riskDelta,
+        behaviorCount: `+${item.addedBehaviors.length}/-${item.removedBehaviors.length}`
+      });
     }
 
     for (const item of diff.added) {
-    allItems.push({
-      ...item,
-      status: 'Added',
-      riskChange: item.riskScore,
-      behaviorCount: item.behaviors.length
-    });
+      allItems.push({
+        ...item,
+        status: 'Added',
+        riskChange: item.riskScore,
+        behaviorCount: item.behaviors.length
+      });
     }
 
     for (const item of diff.removed) {
-    allItems.push({
-      ...item,
-      status: 'Removed',
-      riskChange: -item.riskScore,
-      behaviorCount: item.behaviors.length
-    });
+      allItems.push({
+        ...item,
+        status: 'Removed',
+        riskChange: -item.riskScore,
+        behaviorCount: item.behaviors.length
+      });
     }
 
     // Sort by risk change (highest risk increase first)
     allItems.sort((a, b) => b.riskChange - a.riskChange);
 
     for (const item of allItems) {
-    const fileName = item.file.replace(/^\/[^/]+\//, '');
-    const riskChangeStr = item.riskChange > 0 ? `+${item.riskChange}` : item.riskChange.toString();
-    body += `| \`${fileName}\` | ${item.status} | ${riskChangeStr} | ${item.behaviorCount} |\n`;
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      const riskChangeStr =
+        item.riskChange > 0 ? `+${item.riskChange}` : item.riskChange.toString();
+      body += `| \`${fileName}\` | ${item.status} | ${riskChangeStr} | ${item.behaviorCount} |\n`;
     }
 
     body += '\n</details>';
   }
 
   // Add raw JSON for debugging
-  body += '\n\n<details><summary>🔍 Raw JSON Report</summary>\n\n```json\n' +
-    JSON.stringify(diff.raw || diff, null, 2).substring(0, 50000) + '\n```\n</details>';
+  body +=
+    '\n\n<details><summary>🔍 Raw JSON Report</summary>\n\n```json\n' +
+    JSON.stringify(diff.raw || diff, null, 2).substring(0, 50000) +
+    '\n```\n</details>';
 
   if (existingComment) {
     // Update existing comment
     await octokit.rest.issues.updateComment({
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo,
-    comment_id: existingComment.id,
-    body: body
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      comment_id: existingComment.id,
+      body: body
     });
     core.info(`Updated existing comment: ${existingComment.html_url}`);
   } else {
     // Create new comment
     const { data: newComment } = await octokit.rest.issues.createComment({
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo,
-    issue_number: github.context.payload.pull_request.number,
-    body: body
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      issue_number: github.context.payload.pull_request.number,
+      body: body
     });
     core.info(`Created new comment: ${newComment.html_url}`);
   }
