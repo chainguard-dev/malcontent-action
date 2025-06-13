@@ -2,7 +2,7 @@ name: Malcontent Analysis on Push
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 permissions:
   contents: read
@@ -11,13 +11,16 @@ jobs:
   malcontent:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          fetch-depth: 2  # Need at least 2 commits for HEAD~1
+          fetch-depth: 2 # Need at least 2 commits for HEAD~1
 
       - name: Run Malcontent Diff
-        uses: ./  # In actual usage, this would be: username/malcontent-action@v1
+        uses: ./ # In actual usage, this would be: username/malcontent-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # Will automatically use HEAD vs HEAD~1 for diff

@@ -34603,7 +34603,7 @@ async function run() {
       // Write to workflow summary for non-PR contexts
       await core.summary
         .addRaw(diffSummary)
-        .addDetails('View detailed report', `\`\`\`json\n${JSON.stringify(diff, null, 2).substring(0, 60000)}\n\`\`\``)
+        .addDetails('View detailed report\n', '```json\n' + JSON.stringify(diff, null, 2).substring(0, 60000) + '\n```')
         .write();
       core.info('Malcontent findings written to workflow summary');
     }
