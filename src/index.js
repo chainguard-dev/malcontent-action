@@ -211,6 +211,7 @@ async function run() {
     // Set outputs
     core.setOutput('diff-summary', diffSummary);
     core.setOutput('risk-increased', diff.riskIncreased);
+    core.setOutput('risk-delta', diff.totalRiskDelta || 0);
     core.setOutput('report-file', reportPath);
 
     // Output results

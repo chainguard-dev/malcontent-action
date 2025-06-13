@@ -70,6 +70,31 @@ jobs:
 | `base-ref` | Base ref to compare (auto-detected) | - |
 | `head-ref` | Head ref to analyze (auto-detected) | - |
 
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `diff-summary` | Summary of malcontent findings diff |
+| `risk-increased` | Whether the risk score increased (`true`/`false`) |
+| `risk-delta` | The change in risk score (positive for increase, negative for decrease) |
+| `report-file` | Path to the full diff report JSON file |
+
+### Example: Using outputs in workflow
+
+```yaml
+- uses: your-username/malcontent-action@v1
+  id: malcontent
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Check risk delta
+  run: |
+    echo "Risk changed by: ${{ steps.malcontent.outputs.risk-delta }} points"
+    if [[ "${{ steps.malcontent.outputs.risk-increased }}" == "true" ]]; then
+      echo "⚠️ Security risk increased!"
+    fi
+```
+
 ## Modes
 
 ### Diff Mode (Default)
