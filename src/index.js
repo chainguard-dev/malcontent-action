@@ -562,14 +562,23 @@ function generateDiffSummary(diff) {
     lines.push('### Modified Files');
     lines.push('');
     
-    for (const item of diff.changed) {
+    // Sort files by risk delta (highest risk increase first)
+    const sortedChanged = [...diff.changed].sort((a, b) => b.riskDelta - a.riskDelta);
+    
+    for (const item of sortedChanged) {
       const fileName = item.file.replace(/^\/[^/]+\//, ''); // Remove /base/ or /head/ prefix
       lines.push(`#### 📄 \`${fileName}\``);
       
       if (item.addedBehaviors.length > 0) {
         lines.push('');
         lines.push('**➕ Added behaviors:**');
-        for (const behavior of item.addedBehaviors) {
+        
+        // Sort behaviors by risk score (highest first)
+        const sortedAdded = [...item.addedBehaviors].sort((a, b) => {
+          return (b.RiskScore || 0) - (a.RiskScore || 0);
+        });
+        
+        for (const behavior of sortedAdded) {
           const riskEmoji = getRiskEmoji(behavior.RiskLevel);
           lines.push(`- ${riskEmoji} **${behavior.Description}** [${behavior.RiskLevel}]`);
           if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
@@ -585,7 +594,13 @@ function generateDiffSummary(diff) {
       if (item.removedBehaviors.length > 0) {
         lines.push('');
         lines.push('**➖ Removed behaviors:**');
-        for (const behavior of item.removedBehaviors) {
+        
+        // Sort behaviors by risk score (highest first)
+        const sortedRemoved = [...item.removedBehaviors].sort((a, b) => {
+          return (b.RiskScore || 0) - (a.RiskScore || 0);
+        });
+        
+        for (const behavior of sortedRemoved) {
           const riskEmoji = getRiskEmoji(behavior.RiskLevel);
           lines.push(`- ${riskEmoji} ~~${behavior.Description}~~ [${behavior.RiskLevel}]`);
           if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
@@ -602,12 +617,16 @@ function generateDiffSummary(diff) {
   if (diff.added.length > 0) {
     lines.push('### New Files with Security Findings');
     lines.push('');
-    for (const item of diff.added.slice(0, 5)) {
+    
+    // Sort by risk score (highest first)
+    const sortedAdded = [...diff.added].sort((a, b) => b.riskScore - a.riskScore);
+    
+    for (const item of sortedAdded.slice(0, 5)) {
       const fileName = item.file.replace(/^\/[^/]+\//, '');
       lines.push(`- 📄 \`${fileName}\` (${item.behaviors.length} behaviors, risk score: ${item.riskScore})`);
     }
-    if (diff.added.length > 5) {
-      lines.push(`- ... and ${diff.added.length - 5} more files`);
+    if (sortedAdded.length > 5) {
+      lines.push(`- ... and ${sortedAdded.length - 5} more files`);
     }
     lines.push('');
   }
@@ -616,12 +635,16 @@ function generateDiffSummary(diff) {
   if (diff.removed.length > 0) {
     lines.push('### Removed Files');
     lines.push('');
-    for (const item of diff.removed.slice(0, 5)) {
+    
+    // Sort by risk score (highest first) 
+    const sortedRemoved = [...diff.removed].sort((a, b) => b.riskScore - a.riskScore);
+    
+    for (const item of sortedRemoved.slice(0, 5)) {
       const fileName = item.file.replace(/^\/[^/]+\//, '');
-      lines.push(`- ~~${fileName}~~ (previously ${item.behaviors.length} behaviors)`);
+      lines.push(`- ~~${fileName}~~ (previously ${item.behaviors.length} behaviors, risk score: ${item.riskScore})`);
     }
-    if (diff.removed.length > 5) {
-      lines.push(`- ... and ${diff.removed.length - 5} more files`);
+    if (sortedRemoved.length > 5) {
+      lines.push(`- ... and ${sortedRemoved.length - 5} more files`);
     }
     lines.push('');
   }
@@ -684,21 +707,43 @@ async function postPRComment(octokit, summary, diff) {
     body += '| File | Status | Risk Change | Behaviors |\n';
     body += '|------|--------|-------------|----------|\n';
     
+    // Create a combined array for sorting
+    const allItems = [];
+    
     for (const item of diff.changed) {
-      const fileName = item.file.replace(/^\/[^/]+\//, '');
-      const riskChange = item.riskDelta > 0 ? `+${item.riskDelta}` : item.riskDelta.toString();
-      const behaviorChange = `+${item.addedBehaviors.length}/-${item.removedBehaviors.length}`;
-      body += `| \`${fileName}\` | Modified | ${riskChange} | ${behaviorChange} |\n`;
+      allItems.push({
+        ...item,
+        status: 'Modified',
+        riskChange: item.riskDelta,
+        behaviorCount: `+${item.addedBehaviors.length}/-${item.removedBehaviors.length}`
+      });
     }
     
     for (const item of diff.added) {
-      const fileName = item.file.replace(/^\/[^/]+\//, '');
-      body += `| \`${fileName}\` | Added | +${item.riskScore} | ${item.behaviors.length} |\n`;
+      allItems.push({
+        ...item,
+        status: 'Added',
+        riskChange: item.riskScore,
+        behaviorCount: item.behaviors.length
+      });
     }
     
     for (const item of diff.removed) {
+      allItems.push({
+        ...item,
+        status: 'Removed',
+        riskChange: -item.riskScore,
+        behaviorCount: item.behaviors.length
+      });
+    }
+    
+    // Sort by risk change (highest risk increase first)
+    allItems.sort((a, b) => b.riskChange - a.riskChange);
+    
+    for (const item of allItems) {
       const fileName = item.file.replace(/^\/[^/]+\//, '');
-      body += `| \`${fileName}\` | Removed | -${item.riskScore} | ${item.behaviors.length} |\n`;
+      const riskChangeStr = item.riskChange > 0 ? `+${item.riskChange}` : item.riskChange.toString();
+      body += `| \`${fileName}\` | ${item.status} | ${riskChangeStr} | ${item.behaviorCount} |\n`;
     }
     
     body += '\n</details>';
