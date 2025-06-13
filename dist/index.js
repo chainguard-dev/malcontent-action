@@ -34801,42 +34801,52 @@ function parseDiffOutput(diffOutput) {
     const parsed = JSON.parse(diffOutput);
     diff.raw = parsed;
 
-    // Process the diff output based on malcontent's diff format
-    if (parsed.added) {
-      for (const [file, data] of Object.entries(parsed.added)) {
+    // Handle the new format with uppercase Diff field
+    const diffData = parsed.Diff || parsed.diff || parsed;
+    
+    // Process added files
+    if (diffData.Added) {
+      for (const [file, data] of Object.entries(diffData.Added)) {
         diff.added.push({
-          file,
+          file: data.Path || file,
           findings: data,
+          behaviors: data.Behaviors || [],
           riskScore: calculateRiskScore(data)
         });
       }
     }
-
-    if (parsed.removed) {
-      for (const [file, data] of Object.entries(parsed.removed)) {
+    
+    // Process removed files
+    if (diffData.Removed) {
+      for (const [file, data] of Object.entries(diffData.Removed)) {
         diff.removed.push({
-          file,
+          file: data.Path || file,
           findings: data,
+          behaviors: data.Behaviors || [],
           riskScore: calculateRiskScore(data)
         });
       }
     }
-
-    if (parsed.modified) {
-      for (const [file, data] of Object.entries(parsed.modified)) {
-        const baseRisk = calculateRiskScore(data.previous);
-        const headRisk = calculateRiskScore(data.current);
-        const riskDelta = headRisk - baseRisk;
-
+    
+    // Process modified files
+    if (diffData.Modified) {
+      for (const [key, data] of Object.entries(diffData.Modified)) {
+        const behaviors = data.Behaviors || [];
+        const addedBehaviors = behaviors.filter(b => !b.DiffRemoved);
+        const removedBehaviors = behaviors.filter(b => b.DiffRemoved);
+        
         diff.changed.push({
-          file,
-          baseFindings: data.previous,
-          headFindings: data.current,
-          riskDelta,
-          baseRisk,
-          headRisk
+          file: data.Path || key,
+          path: data.Path,
+          behaviors,
+          addedBehaviors,
+          removedBehaviors,
+          riskDelta: addedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0) - 
+                     removedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0)
         });
-
+        
+        const riskDelta = addedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0) - 
+                          removedBehaviors.reduce((sum, b) => sum + (b.RiskScore || 0), 0);
         diff.totalRiskDelta += riskDelta;
         if (riskDelta > 0) {
           diff.riskIncreased = true;
@@ -34861,11 +34871,17 @@ function calculateRiskScore(findings) {
   // Handle different formats of findings
   if (Array.isArray(findings)) {
     for (const finding of findings) {
-      score += getRiskValue(finding.risk || finding.severity || 'low');
+      score += finding.RiskScore || getRiskValue(finding.RiskLevel || finding.risk || finding.severity || 'low');
+    }
+  } else if (findings.Behaviors) {
+    // New format with uppercase Behaviors
+    for (const behavior of findings.Behaviors) {
+      score += behavior.RiskScore || getRiskValue(behavior.RiskLevel || 'low');
     }
   } else if (findings.behaviors) {
+    // Old format with lowercase behaviors
     for (const behavior of findings.behaviors) {
-      score += getRiskValue(behavior.risk || 'low');
+      score += behavior.RiskScore || getRiskValue(behavior.risk || 'low');
     }
   }
 
@@ -34906,51 +34922,104 @@ function generateAnalyzeSummary(diff) {
 }
 
 function generateDiffSummary(diff) {
-  const lines = ['## Malcontent Analysis Summary'];
-
+  const lines = [];
+  
   if (diff.totalRiskDelta === 0 && diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
-    lines.push('✅ No security-relevant changes detected');
-    return lines.join('\\n');
+    return '## 🟢 No security-relevant changes detected\n\nAll files passed malcontent analysis without any behavioral differences.';
   }
 
+  // Title based on overall risk change
   if (diff.riskIncreased) {
-    lines.push(`⚠️ **Risk Score Increased by ${diff.totalRiskDelta}**`);
+    lines.push(`## 🔴 Security Risk Increased (+${diff.totalRiskDelta} points)`);
   } else if (diff.totalRiskDelta < 0) {
-    lines.push(`✅ Risk Score Decreased by ${Math.abs(diff.totalRiskDelta)}`);
+    lines.push(`## 🟢 Security Risk Decreased (${diff.totalRiskDelta} points)`);
+  } else {
+    lines.push('## 🟡 Security Behaviors Changed (no net risk change)');
+  }
+  
+  lines.push('');
+
+  // Modified files with behavior changes
+  if (diff.changed.length > 0) {
+    lines.push('### Modified Files');
+    lines.push('');
+    
+    for (const item of diff.changed) {
+      const fileName = item.file.replace(/^\/[^/]+\//, ''); // Remove /base/ or /head/ prefix
+      lines.push(`#### 📄 \`${fileName}\``);
+      
+      if (item.addedBehaviors.length > 0) {
+        lines.push('');
+        lines.push('**➕ Added behaviors:**');
+        for (const behavior of item.addedBehaviors) {
+          const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+          lines.push(`- ${riskEmoji} **${behavior.Description}** [${behavior.RiskLevel}]`);
+          if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+            lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+          }
+          if (behavior.RuleURL) {
+            const ruleName = behavior.RuleName || behavior.ID;
+            lines.push(`  - Rule: [${ruleName}](${behavior.RuleURL})`);
+          }
+        }
+      }
+      
+      if (item.removedBehaviors.length > 0) {
+        lines.push('');
+        lines.push('**➖ Removed behaviors:**');
+        for (const behavior of item.removedBehaviors) {
+          const riskEmoji = getRiskEmoji(behavior.RiskLevel);
+          lines.push(`- ${riskEmoji} ~~${behavior.Description}~~ [${behavior.RiskLevel}]`);
+          if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+            lines.push(`  - Match: \`${behavior.MatchStrings[0]}\``);
+          }
+        }
+      }
+      
+      lines.push('');
+    }
   }
 
+  // New files with findings
   if (diff.added.length > 0) {
-    lines.push(`\\n### New Files with Findings (${diff.added.length})`);
+    lines.push('### New Files with Security Findings');
+    lines.push('');
     for (const item of diff.added.slice(0, 5)) {
-      lines.push(`- ${item.file} (risk score: ${item.riskScore})`);
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      lines.push(`- 📄 \`${fileName}\` (${item.behaviors.length} behaviors, risk score: ${item.riskScore})`);
     }
     if (diff.added.length > 5) {
-      lines.push(`- ... and ${diff.added.length - 5} more`);
+      lines.push(`- ... and ${diff.added.length - 5} more files`);
     }
+    lines.push('');
   }
 
+  // Removed files
   if (diff.removed.length > 0) {
-    lines.push(`\\n### Removed Files with Findings (${diff.removed.length})`);
+    lines.push('### Removed Files');
+    lines.push('');
     for (const item of diff.removed.slice(0, 5)) {
-      lines.push(`- ${item.file} (risk score: ${item.riskScore})`);
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      lines.push(`- ~~${fileName}~~ (previously ${item.behaviors.length} behaviors)`);
     }
     if (diff.removed.length > 5) {
-      lines.push(`- ... and ${diff.removed.length - 5} more`);
+      lines.push(`- ... and ${diff.removed.length - 5} more files`);
     }
+    lines.push('');
   }
 
-  if (diff.changed.length > 0) {
-    lines.push(`\\n### Files with Changed Findings (${diff.changed.length})`);
-    for (const item of diff.changed.slice(0, 5)) {
-      const delta = item.riskDelta > 0 ? `+${item.riskDelta}` : item.riskDelta;
-      lines.push(`- ${item.file} (risk delta: ${delta})`);
-    }
-    if (diff.changed.length > 5) {
-      lines.push(`- ... and ${diff.changed.length - 5} more`);
-    }
-  }
+  return lines.join('\n');
+}
 
-  return lines.join('\\n');
+function getRiskEmoji(riskLevel) {
+  if (!riskLevel) return '⚪';
+  switch (riskLevel.toUpperCase()) {
+    case 'CRITICAL': return '🔴';
+    case 'HIGH': return '🟠';
+    case 'MEDIUM': return '🟡';
+    case 'LOW': return '🟢';
+    default: return '⚪';
+  }
 }
 
 async function postPRComment(octokit, summary, diff) {
@@ -34989,8 +35058,37 @@ async function postPRComment(octokit, summary, diff) {
   }
 
   // There are findings - post or update comment
-  const body = commentMarker + '\n' + summary + '\n\n<details><summary>View detailed report</summary>\n\n```json\n' +
-    JSON.stringify(diff, null, 2).substring(0, 60000) + '\n```\n</details>';
+  let body = commentMarker + '\n' + summary;
+  
+  // Add a summary table if there are multiple files
+  if (diff.changed.length + diff.added.length + diff.removed.length > 1) {
+    body += '\n\n<details><summary>📊 Summary Table</summary>\n\n';
+    body += '| File | Status | Risk Change | Behaviors |\n';
+    body += '|------|--------|-------------|----------|\n';
+    
+    for (const item of diff.changed) {
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      const riskChange = item.riskDelta > 0 ? `+${item.riskDelta}` : item.riskDelta.toString();
+      const behaviorChange = `+${item.addedBehaviors.length}/-${item.removedBehaviors.length}`;
+      body += `| \`${fileName}\` | Modified | ${riskChange} | ${behaviorChange} |\n`;
+    }
+    
+    for (const item of diff.added) {
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      body += `| \`${fileName}\` | Added | +${item.riskScore} | ${item.behaviors.length} |\n`;
+    }
+    
+    for (const item of diff.removed) {
+      const fileName = item.file.replace(/^\/[^/]+\//, '');
+      body += `| \`${fileName}\` | Removed | -${item.riskScore} | ${item.behaviors.length} |\n`;
+    }
+    
+    body += '\n</details>';
+  }
+  
+  // Add raw JSON for debugging
+  body += '\n\n<details><summary>🔍 Raw JSON Report</summary>\n\n```json\n' +
+    JSON.stringify(diff.raw || diff, null, 2).substring(0, 50000) + '\n```\n</details>';
 
   if (existingComment) {
     // Update existing comment
