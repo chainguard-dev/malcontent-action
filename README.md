@@ -143,10 +143,10 @@ The `risk-delta` output allows you to implement custom logic based on the magnit
 
 ### Uploading to GitHub Advanced Security
 
-The action generates a SARIF report that can be uploaded to GitHub Advanced Security for integration with code scanning:
+The action generates a SARIF (Static Analysis Results Interchange Format) report that can be uploaded to GitHub Advanced Security for integration with code scanning:
 
 ```yaml
-- uses: imjasonh/malcontent-action@...
+- uses: imjasonh/malcontent-action@v1
   id: malcontent
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -159,10 +159,23 @@ The action generates a SARIF report that can be uploaded to GitHub Advanced Secu
     category: malcontent
 ```
 
-This will make malcontent findings appear in:
+#### SARIF Report Details
+
+The generated SARIF report:
+- Uses SARIF version 2.1.0 format
+- Maps malcontent risk levels to SARIF severity levels:
+  - CRITICAL/HIGH → `error` (severity score: 9.0/7.0)
+  - MEDIUM → `warning` (severity score: 5.0)
+  - LOW → `note` (severity score: 3.0)
+- Includes behavior descriptions, match strings, and rule links
+- Only reports newly added behaviors (not removed ones) since these represent new risks
+- Compatible with GitHub's code scanning and security features
+
+This integration makes malcontent findings appear in:
 - The Security tab of your repository
-- Pull request security annotations
-- Security alerts for your repository
+- Pull request security annotations inline with code
+- Security alerts and vulnerability tracking
+- Code scanning API results
 
 ## How It Works
 
