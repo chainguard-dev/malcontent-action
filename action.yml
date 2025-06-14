@@ -42,6 +42,8 @@ outputs:
     description: 'The change in risk score (positive for increase, negative for decrease)'
   report-file:
     description: 'Path to the full diff report'
+  sarif-file:
+    description: 'Path to the SARIF report file for upload to GitHub Advanced Security'
 
 runs:
   using: 'node20'

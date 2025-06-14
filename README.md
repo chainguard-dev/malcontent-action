@@ -100,6 +100,7 @@ jobs:
 | `risk-increased` | Whether the risk score increased (`true`/`false`) |
 | `risk-delta` | The change in risk score (positive for increase, negative for decrease) |
 | `report-file` | Path to the full diff report JSON file |
+| `sarif-file` | Path to the SARIF report file for upload to GitHub Advanced Security |
 
 ### Using the risk-delta output
 
@@ -139,6 +140,29 @@ The `risk-delta` output allows you to implement custom logic based on the magnit
         labels: ['security-review']
       })
 ```
+
+### Uploading to GitHub Advanced Security
+
+The action generates a SARIF report that can be uploaded to GitHub Advanced Security for integration with code scanning:
+
+```yaml
+- uses: imjasonh/malcontent-action@...
+  id: malcontent
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  if: always() # Upload even if the malcontent check fails
+  with:
+    sarif_file: ${{ steps.malcontent.outputs.sarif-file }}
+    category: malcontent
+```
+
+This will make malcontent findings appear in:
+- The Security tab of your repository
+- Pull request security annotations
+- Security alerts for your repository
 
 ## How It Works
 
