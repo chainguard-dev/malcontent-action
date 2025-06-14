@@ -54,7 +54,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: imjasonh/malcontent-action@v1
+J      - uses: imjasonh/malcontent-action...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -75,7 +75,7 @@ jobs:
         with:
           fetch-depth: 2  # Need HEAD and HEAD~1
       
-      - uses: imjasonh/malcontent-action@v1
+      - uses: imjasonh/malcontent-action@...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -106,7 +106,7 @@ jobs:
 The `risk-delta` output allows you to implement custom logic based on the magnitude of security changes:
 
 ```yaml
-- uses: imjasonh/malcontent-action@v1
+- uses: imjasonh/malcontent-action@...
   id: malcontent
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
