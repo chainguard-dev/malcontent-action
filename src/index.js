@@ -695,6 +695,23 @@ function generateSarifReport(diff, baseRef, headRef) {
     }
   }
 
+  // Helper function to get numeric severity score (matching Python implementation)
+  function getSeverityScore(riskLevel) {
+    if (!riskLevel) return 5.0;
+    switch (riskLevel.toUpperCase()) {
+      case 'CRITICAL':
+        return 9.0;
+      case 'HIGH':
+        return 7.0;
+      case 'MEDIUM':
+        return 5.0;
+      case 'LOW':
+        return 3.0;
+      default:
+        return 5.0;
+    }
+  }
+
   // Process added files
   for (const item of diff.added) {
     for (const behavior of item.behaviors || []) {
@@ -719,7 +736,7 @@ function generateSarifReport(diff, baseRef, headRef) {
               : '[Malcontent](https://github.com/chainguard-dev/malcontent)'
           },
           properties: {
-            'security-severity': behavior.RiskScore?.toString() || '5'
+            'security-severity': getSeverityScore(behavior.RiskLevel).toString()
           }
         });
       }
@@ -743,10 +760,10 @@ function generateSarifReport(diff, baseRef, headRef) {
         ]
       };
 
-      // Add match strings as code flows if available
+      // Add match strings as tags if available
       if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
         result.properties = {
-          matchStrings: behavior.MatchStrings
+          tags: behavior.MatchStrings
         };
         result.message.text += `: ${behavior.MatchStrings[0]}`;
       }
@@ -779,7 +796,7 @@ function generateSarifReport(diff, baseRef, headRef) {
               : '[Malcontent](https://github.com/chainguard-dev/malcontent)'
           },
           properties: {
-            'security-severity': behavior.RiskScore?.toString() || '5'
+            'security-severity': getSeverityScore(behavior.RiskLevel).toString()
           }
         });
       }
@@ -803,10 +820,10 @@ function generateSarifReport(diff, baseRef, headRef) {
         ]
       };
 
-      // Add match strings as code flows if available
+      // Add match strings as tags if available
       if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
         result.properties = {
-          matchStrings: behavior.MatchStrings
+          tags: behavior.MatchStrings
         };
         result.message.text += `: ${behavior.MatchStrings[0]}`;
       }
