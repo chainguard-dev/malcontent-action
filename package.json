@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jason/malcontent-action.git"
+    "url": "git+https://github.com/chainguard-dev/malcontent-action.git"
   },
   "keywords": [
     "github",

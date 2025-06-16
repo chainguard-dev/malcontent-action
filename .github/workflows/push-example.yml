@@ -21,7 +21,7 @@ jobs:
 
       - name: Run Malcontent Diff
         id: malcontent
-        uses: ./ # In actual usage, this would be: imjasonh/malcontent-action@...
+        uses: ./ # In actual usage, this would be: chainguard-dev/malcontent-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 

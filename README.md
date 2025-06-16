@@ -54,7 +54,7 @@ jobs:
         with:
           fetch-depth: 0
       
-J      - uses: imjasonh/malcontent-action...
+      - uses: chainguard-dev/malcontent-action...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -75,7 +75,7 @@ jobs:
         with:
           fetch-depth: 2  # Need HEAD and HEAD~1
       
-      - uses: imjasonh/malcontent-action@...
+      - uses: chainguard-dev/malcontent-action@...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -107,7 +107,7 @@ jobs:
 The `risk-delta` output allows you to implement custom logic based on the magnitude of security changes:
 
 ```yaml
-- uses: imjasonh/malcontent-action@...
+- uses: chainguard-dev/malcontent-action@...
   id: malcontent
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -146,7 +146,7 @@ The `risk-delta` output allows you to implement custom logic based on the magnit
 The action generates a SARIF (Static Analysis Results Interchange Format) report that can be uploaded to GitHub Advanced Security for integration with code scanning:
 
 ```yaml
-- uses: imjasonh/malcontent-action@...
+- uses: chainguard-dev/malcontent-action@...
   id: malcontent
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
