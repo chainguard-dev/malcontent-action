@@ -50,11 +50,11 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@...
         with:
           fetch-depth: 0
       
-J      - uses: imjasonh/malcontent-action...
+      - uses: chainguard-dev/malcontent-action...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -71,11 +71,11 @@ jobs:
   malcontent:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@...
         with:
           fetch-depth: 2  # Need HEAD and HEAD~1
       
-      - uses: imjasonh/malcontent-action@...
+      - uses: chainguard-dev/malcontent-action@...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -107,7 +107,7 @@ jobs:
 The `risk-delta` output allows you to implement custom logic based on the magnitude of security changes:
 
 ```yaml
-- uses: imjasonh/malcontent-action@...
+- uses: chainguard-dev/malcontent-action@...
   id: malcontent
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -130,7 +130,7 @@ The `risk-delta` output allows you to implement custom logic based on the magnit
 # Or use different thresholds for different actions
 - name: Request security review
   if: steps.malcontent.outputs.risk-delta > 5 && steps.malcontent.outputs.risk-delta <= 10
-  uses: actions/github-script@v6
+  uses: actions/github-script@...
   with:
     script: |
       github.rest.issues.addLabels({
@@ -146,13 +146,13 @@ The `risk-delta` output allows you to implement custom logic based on the magnit
 The action generates a SARIF (Static Analysis Results Interchange Format) report that can be uploaded to GitHub Advanced Security for integration with code scanning:
 
 ```yaml
-- uses: imjasonh/malcontent-action@v1
+- uses: chainguard-dev/malcontent-action@...
   id: malcontent
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 
 - name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
+  uses: github/codeql-action/upload-sarif@...
   if: always() # Upload even if the malcontent check fails
   with:
     sarif_file: ${{ steps.malcontent.outputs.sarif-file }}

@@ -21,12 +21,9 @@ jobs:
 
       - name: Run Malcontent Diff
         id: malcontent
-        uses: ./ # In actual usage, this would be: imjasonh/malcontent-action@...
+        uses: ./ # In actual usage, this would be: chainguard-dev/malcontent-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # Will automatically use HEAD vs HEAD~1 for diff
-          fail-on-increase: true
-          # No PR to comment on, results will go to workflow summary
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 #v3.29.0 - 11 Jun 2025
