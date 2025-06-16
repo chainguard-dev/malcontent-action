@@ -34562,7 +34562,8 @@ async function run() {
 
     // Generate SARIF report
     const sarifReport = generateSarifReport(diff, baseRefFinal, headRefFinal);
-    const sarifPath = path.join(tempDir, 'malcontent-diff.sarif');
+    // Write SARIF to workspace so it persists after action completes
+    const sarifPath = path.join(process.env.GITHUB_WORKSPACE || process.cwd(), 'malcontent-diff.sarif');
     await fs.writeFile(sarifPath, JSON.stringify(sarifReport, null, 2));
 
     // Set outputs
