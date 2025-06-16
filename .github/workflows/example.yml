@@ -19,10 +19,9 @@ jobs:
 
       - name: Run Malcontent Analysis
         id: malcontent
-        uses: ./ # In actual usage, this would be: imjasonh/malcontent-action@v1
+        uses: ./ # In actual usage, this would be: imjasonh/malcontent-action@...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          fail-on-increase: true
 
       # NB: Could also set `fail-on-increase: false` and use `if: ${{steps.malcontent.outputs.risk-delta > 5}}` to allow some risk increase
 
