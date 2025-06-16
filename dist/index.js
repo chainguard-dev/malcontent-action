@@ -34560,11 +34560,21 @@ async function run() {
     const reportPath = path.join(tempDir, 'malcontent-diff-report.json');
     await fs.writeFile(reportPath, JSON.stringify(diff, null, 2));
 
+    // Generate SARIF report
+    const sarifReport = generateSarifReport(diff, baseRefFinal, headRefFinal);
+    // Write SARIF to workspace so it persists after action completes
+    const sarifPath = path.join(
+      process.env.GITHUB_WORKSPACE || process.cwd(),
+      'malcontent-diff.sarif'
+    );
+    await fs.writeFile(sarifPath, JSON.stringify(sarifReport, null, 2));
+
     // Set outputs
     core.setOutput('diff-summary', diffSummary);
     core.setOutput('risk-increased', diff.riskIncreased);
     core.setOutput('risk-delta', diff.totalRiskDelta || 0);
     core.setOutput('report-file', reportPath);
+    core.setOutput('sarif-file', sarifPath);
 
     // Output results
     if (isPullRequest && commentOnPR) {
@@ -35024,6 +35034,194 @@ function getRiskEmoji(riskLevel) {
     default:
       return '⚪';
   }
+}
+
+function generateSarifReport(diff, baseRef, headRef) {
+  const sarif = {
+    version: '2.1.0',
+    $schema:
+      'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'malcontent',
+            informationUri: 'https://github.com/chainguard-dev/malcontent',
+            version: '1.0.0', // We don't have the actual version, so using a placeholder
+            rules: []
+          }
+        },
+        results: [],
+        versionControlProvenance: [
+          {
+            revisionId: headRef,
+            repositoryUri: github.context.payload.repository?.html_url || ''
+          }
+        ]
+      }
+    ]
+  };
+
+  const run = sarif.runs[0];
+  const rulesMap = new Map();
+
+  // Helper function to convert risk level to SARIF level
+  function getSarifLevel(riskLevel) {
+    if (!riskLevel) return 'note';
+    switch (riskLevel.toUpperCase()) {
+      case 'CRITICAL':
+      case 'HIGH':
+        return 'error';
+      case 'MEDIUM':
+        return 'warning';
+      case 'LOW':
+        return 'note';
+      default:
+        return 'note';
+    }
+  }
+
+  // Helper function to get numeric severity score (matching Python implementation)
+  function getSeverityScore(riskLevel) {
+    if (!riskLevel) return 5.0;
+    switch (riskLevel.toUpperCase()) {
+      case 'CRITICAL':
+        return 9.0;
+      case 'HIGH':
+        return 7.0;
+      case 'MEDIUM':
+        return 5.0;
+      case 'LOW':
+        return 3.0;
+      default:
+        return 5.0;
+    }
+  }
+
+  // Process added files
+  for (const item of diff.added) {
+    for (const behavior of item.behaviors || []) {
+      // Create rule if not exists
+      const ruleId =
+        behavior.RuleName ||
+        `malcontent-${behavior.Description?.replace(/\s+/g, '-').toLowerCase()}`;
+      if (!rulesMap.has(ruleId)) {
+        rulesMap.set(ruleId, {
+          id: ruleId,
+          name: behavior.Description || 'Unknown behavior',
+          shortDescription: {
+            text: behavior.Description || 'Unknown behavior'
+          },
+          fullDescription: {
+            text: `Malcontent detected: ${behavior.Description || 'Unknown behavior'}`
+          },
+          help: {
+            text: behavior.RuleLink || 'https://github.com/chainguard-dev/malcontent',
+            markdown: behavior.RuleLink
+              ? `[View rule](${behavior.RuleLink})`
+              : '[Malcontent](https://github.com/chainguard-dev/malcontent)'
+          },
+          properties: {
+            'security-severity': getSeverityScore(behavior.RiskLevel).toString()
+          }
+        });
+      }
+
+      // Create result
+      const result = {
+        ruleId: ruleId,
+        level: getSarifLevel(behavior.RiskLevel),
+        message: {
+          text: behavior.Description || 'Security behavior detected'
+        },
+        locations: [
+          {
+            physicalLocation: {
+              artifactLocation: {
+                uri: item.file.replace(/^\/[^/]+\//, ''), // Remove temp directory prefix
+                uriBaseId: 'ROOTPATH'
+              }
+            }
+          }
+        ]
+      };
+
+      // Add match strings as tags if available
+      if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+        result.properties = {
+          tags: behavior.MatchStrings
+        };
+        result.message.text += `: ${behavior.MatchStrings[0]}`;
+      }
+
+      run.results.push(result);
+    }
+  }
+
+  // Process modified files (only added behaviors)
+  for (const item of diff.changed) {
+    for (const behavior of item.addedBehaviors || []) {
+      // Create rule if not exists
+      const ruleId =
+        behavior.RuleName ||
+        `malcontent-${behavior.Description?.replace(/\s+/g, '-').toLowerCase()}`;
+      if (!rulesMap.has(ruleId)) {
+        rulesMap.set(ruleId, {
+          id: ruleId,
+          name: behavior.Description || 'Unknown behavior',
+          shortDescription: {
+            text: behavior.Description || 'Unknown behavior'
+          },
+          fullDescription: {
+            text: `Malcontent detected: ${behavior.Description || 'Unknown behavior'}`
+          },
+          help: {
+            text: behavior.RuleLink || 'https://github.com/chainguard-dev/malcontent',
+            markdown: behavior.RuleLink
+              ? `[View rule](${behavior.RuleLink})`
+              : '[Malcontent](https://github.com/chainguard-dev/malcontent)'
+          },
+          properties: {
+            'security-severity': getSeverityScore(behavior.RiskLevel).toString()
+          }
+        });
+      }
+
+      // Create result
+      const result = {
+        ruleId: ruleId,
+        level: getSarifLevel(behavior.RiskLevel),
+        message: {
+          text: behavior.Description || 'Security behavior detected'
+        },
+        locations: [
+          {
+            physicalLocation: {
+              artifactLocation: {
+                uri: item.path || item.file.replace(/^\/[^/]+\//, ''), // Remove temp directory prefix
+                uriBaseId: 'ROOTPATH'
+              }
+            }
+          }
+        ]
+      };
+
+      // Add match strings as tags if available
+      if (behavior.MatchStrings && behavior.MatchStrings.length > 0) {
+        result.properties = {
+          tags: behavior.MatchStrings
+        };
+        result.message.text += `: ${behavior.MatchStrings[0]}`;
+      }
+
+      run.results.push(result);
+    }
+  }
+
+  // Convert rules map to array
+  run.tool.driver.rules = Array.from(rulesMap.values());
+
+  return sarif;
 }
 
 async function postPRComment(octokit, summary, diff) {
