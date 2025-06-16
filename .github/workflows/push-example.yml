@@ -20,9 +20,16 @@ jobs:
           fetch-depth: 2 # Need at least 2 commits for HEAD~1
 
       - name: Run Malcontent Diff
-        uses: ./ # In actual usage, this would be: imjasonh/malcontent-action@v1
+        id: malcontent
+        uses: ./ # In actual usage, this would be: imjasonh/malcontent-action@...
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # Will automatically use HEAD vs HEAD~1 for diff
           fail-on-increase: true
           # No PR to comment on, results will go to workflow summary
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 #v3.29.0 - 11 Jun 2025
+        with:
+          sarif_file: ${{ steps.malcontent.outputs.sarif-file }}
+          category: malcontent
