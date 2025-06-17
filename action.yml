@@ -16,10 +16,10 @@ inputs:
   head-ref:
     description: 'Head ref to analyze (defaults to PR head branch)'
     required: false
-  malcontent-version:
-    description: 'Version of malcontent to use (defaults to latest)'
+  malcontent-image:
+    description: 'Docker image to use for malcontent. Recommend using digest for reproducibility (e.g. cgr.dev/chainguard/malcontent@sha256:...)'
     required: false
-    default: 'latest'
+    default: 'cgr.dev/chainguard/malcontent:latest'
   fail-on-increase:
     description: 'Fail the action if risk score increases'
     required: false

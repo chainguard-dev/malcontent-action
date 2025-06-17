@@ -86,7 +86,7 @@ jobs:
 |-------|-------------|---------|
 | `github-token` | GitHub token for API access | `${{ github.token }}` |
 | `base-path` | Base directory to analyze | `.` |
-| `malcontent-version` | Version of malcontent to use | `latest` |
+| `malcontent-image` | Docker image for malcontent (use digest for reproducibility) | `cgr.dev/chainguard/malcontent:latest` |
 | `fail-on-increase` | Fail if risk score increases | `true` |
 | `comment-on-pr` | Comment results on PR | `true` |
 | `base-ref` | Base ref to compare (auto-detected) | - |
@@ -176,6 +176,23 @@ This integration makes malcontent findings appear in:
 - Pull request security annotations inline with code
 - Security alerts and vulnerability tracking
 - Code scanning API results
+
+### Using a Specific Image Version
+
+For reproducible builds and security, we recommend using a specific image digest instead of a tag:
+
+```yaml
+- uses: chainguard-dev/malcontent-action@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    malcontent-image: cgr.dev/chainguard/malcontent@sha256:1234567890abcdef...
+```
+
+You can find the digest for a specific version by running:
+```bash
+docker pull cgr.dev/chainguard/malcontent:latest
+docker inspect cgr.dev/chainguard/malcontent:latest --format='{{.RepoDigests}}'
+```
 
 ## How It Works
 
