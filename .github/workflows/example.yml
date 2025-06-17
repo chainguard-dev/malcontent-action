@@ -13,6 +13,7 @@ jobs:
 
     permissions:
       contents: read
+      pull-requests: write # Required for PR comments
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
