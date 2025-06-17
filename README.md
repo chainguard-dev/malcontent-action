@@ -59,6 +59,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+You can see the action in action here, on a PR that attempts to add a backdoored `xzutils` shared library to this repo: https://github.com/chainguard-dev/malcontent-action/pull/7
+
 ### Push Events
 
 ```yaml
@@ -188,11 +190,7 @@ For reproducible builds and security, we recommend using a specific image digest
     malcontent-image: cgr.dev/chainguard/malcontent@sha256:1234567890abcdef...
 ```
 
-You can find the digest for a specific version by running:
-```bash
-docker pull cgr.dev/chainguard/malcontent:latest
-docker inspect cgr.dev/chainguard/malcontent:latest --format='{{.RepoDigests}}'
-```
+You can use [digestabot](https://github.com/chainguard-dev/digestabot) to automate digest updates.
 
 ## How It Works
 
@@ -200,7 +198,7 @@ This action uses malcontent's native `diff` command to compare security behavior
 
 1. Detects the base and head commits (from PR or push context)
 2. Extracts changed files to temporary directories
-3. Runs `malcontent diff` to compare behaviors
+3. Runs `mal diff` to compare behaviors
 4. Reports findings via PR comments or workflow summaries
 5. Can fail the build if risk increases
 
