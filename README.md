@@ -59,6 +59,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+You can see the action in action here, on a PR that attempts to add a backdoored `xzutils` shared library to this repo: https://github.com/chainguard-dev/malcontent-action/pull/7
+
 ### Push Events
 
 ```yaml
@@ -86,7 +88,7 @@ jobs:
 |-------|-------------|---------|
 | `github-token` | GitHub token for API access | `${{ github.token }}` |
 | `base-path` | Base directory to analyze | `.` |
-| `malcontent-version` | Version of malcontent to use | `latest` |
+| `malcontent-image` | Docker image for malcontent (use digest for reproducibility) | `cgr.dev/chainguard/malcontent:latest` |
 | `fail-on-increase` | Fail if risk score increases | `true` |
 | `comment-on-pr` | Comment results on PR | `true` |
 | `base-ref` | Base ref to compare (auto-detected) | - |
@@ -177,13 +179,26 @@ This integration makes malcontent findings appear in:
 - Security alerts and vulnerability tracking
 - Code scanning API results
 
+### Using a Specific Image Version
+
+For reproducible builds and security, we recommend using a specific image digest instead of a tag:
+
+```yaml
+- uses: chainguard-dev/malcontent-action@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    malcontent-image: cgr.dev/chainguard/malcontent@sha256:1234567890abcdef...
+```
+
+You can use [digestabot](https://github.com/chainguard-dev/digestabot) to automate digest updates.
+
 ## How It Works
 
 This action uses malcontent's native `diff` command to compare security behaviors between base and head versions of your code. It:
 
 1. Detects the base and head commits (from PR or push context)
 2. Extracts changed files to temporary directories
-3. Runs `malcontent diff` to compare behaviors
+3. Runs `mal diff` to compare behaviors
 4. Reports findings via PR comments or workflow summaries
 5. Can fail the build if risk increases
 

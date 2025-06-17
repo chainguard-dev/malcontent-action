@@ -1,7 +1,6 @@
 const core = require('@actions/core');
 const github = require('@actions/github');
 const exec = require('@actions/exec');
-const tc = require('@actions/tool-cache');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -11,7 +10,7 @@ async function run() {
     const token = core.getInput('github-token', { required: true });
     const baseRef = core.getInput('base-ref') || github.context.payload.pull_request?.base?.sha;
     const headRef = core.getInput('head-ref') || github.context.payload.pull_request?.head?.sha;
-    const malcontentVersion = core.getInput('malcontent-version');
+    const malcontentImage = core.getInput('malcontent-image');
     const failOnIncrease = core.getBooleanInput('fail-on-increase');
     const commentOnPR = core.getBooleanInput('comment-on-pr');
     const basePath = core.getInput('base-path') || '.';
@@ -46,8 +45,8 @@ async function run() {
     }
 
     // Install malcontent
-    const malcontentPath = await installMalcontent(malcontentVersion);
-    core.info(`Malcontent installed at: ${malcontentPath}`);
+    const malcontentPath = await installMalcontent(malcontentImage);
+    core.info(`Using malcontent image: ${malcontentImage}`);
 
     // Create temp directory for analysis
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'malcontent-'));
@@ -224,7 +223,7 @@ async function run() {
   }
 }
 
-async function installMalcontent(version) {
+async function installMalcontent(image) {
   // First check if malcontent is already installed
   try {
     const { exitCode } = await exec.exec('malcontent', ['--version'], {
@@ -240,16 +239,16 @@ async function installMalcontent(version) {
   }
 
   // Use Docker to run malcontent
-  core.info('Setting up malcontent using Docker...');
-
-  // Pull the malcontent image
-  const imageTag = version && version !== 'latest' ? version : 'latest';
-  const image = `cgr.dev/chainguard/malcontent:${imageTag}`;
+  core.info(`Setting up malcontent using Docker image: ${image}`);
 
   await exec.exec('docker', ['pull', image]);
 
   // Store the image name for later use
   malcontentDockerImage = image;
+
+  // Run --version to log which version we're using
+  core.info('Checking malcontent version...');
+  await exec.exec('docker', ['run', '--rm', image, '--version']);
 
   // Return a special marker to indicate Docker mode
   return 'docker:malcontent';
