@@ -61,6 +61,8 @@ jobs:
 
 You can see the action in action here, on a PR that attempts to add a backdoored `xzutils` shared library to this repo: https://github.com/chainguard-dev/malcontent-action/pull/7
 
+> **Note on PR Comments from Forks**: When this action runs on a pull request from a forked repository, it won't be able to post comments due to GitHub's security restrictions. Workflows triggered by `pull_request` events from forks run with read-only permissions and cannot write to the base repository. The action will still analyze the code and fail if malware is detected, but the detailed comment won't appear on the PR. To see the full analysis, check the workflow logs or consider running the action on branches within the main repository.
+
 ### Push Events
 
 ```yaml
