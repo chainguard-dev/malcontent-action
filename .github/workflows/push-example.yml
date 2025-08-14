@@ -21,7 +21,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 2 # Need at least 2 commits for HEAD~1
 
@@ -32,7 +32,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@d6bbdef45e766d081b84a2def353b0055f728d3e #v3.29.0 - 11 Jun 2025
+        uses: github/codeql-action/upload-sarif@df559355d593797519d70b90fc8edd5db049e7a2 #v3.29.0 - 11 Jun 2025
         if: always() # Upload even if the malcontent check fails
         with:
           sarif_file: ${{ steps.malcontent.outputs.sarif-file }}
