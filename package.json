@@ -34,7 +34,7 @@
     "eslint": "^10.0.3",
     "husky": "^9.1.7",
     "jest": "^30.3.0",
-    "lint-staged": "^16.3.3",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.8.1"
   },
   "lint-staged": {
