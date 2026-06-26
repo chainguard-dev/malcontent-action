@@ -9,12 +9,16 @@ on:
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
+      - '.github/dependabot.yml'
+      - '.github/zizmor.yml'
       - 'action.yml'
   push:
     branches: ['main']
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
+      - '.github/dependabot.yml'
+      - '.github/zizmor.yml'
       - 'action.yml'
 
 permissions: {}
