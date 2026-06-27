@@ -3,7 +3,15 @@
 #
 rules:
   # adjust the default cooldown for non-security dependabot updates
-  # to 3 days, down from 7.
+  # to 3 days, down from 7. Paired with `cooldown.default-days: 3` in
+  # .github/dependabot.yml.
   dependabot-cooldown:
     config:
       days: 3
+  # Cosmetic pedantic-only findings — suppressed across the campaign.
+  anonymous-definition:
+    disable: true
+  undocumented-permissions:
+    disable: true
+  concurrency-limits:
+    disable: true
