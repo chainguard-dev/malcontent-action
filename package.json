@@ -30,12 +30,12 @@
     "@actions/github": "^9.1.1"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.44.0",
+    "@vercel/ncc": "^0.44.1",
     "eslint": "^10.6.0",
     "husky": "^9.1.7",
     "jest": "^30.4.2",
     "lint-staged": "^17.0.8",
-    "prettier": "^3.9.3"
+    "prettier": "^3.9.4"
   },
   "lint-staged": {
     "src/**/*.js": [
